@@ -10,9 +10,9 @@ dependencies — GitHub Pages just needs to serve these files as-is.
    `aotearoa-dashboard`. Public is fine (Pages requires a public repo unless
    you're on a paid GitHub plan that supports private Pages).
 2. On the repository page, choose **Add file → Upload files**, then drag in
-   every file and folder from this project (`index.html`,
-   `manifest.webmanifest`, `service-worker.js`, `DEPLOY.md`, and the whole
-   `icons/` folder). Commit the upload to the `main` branch.
+   every file from this project (`index.html`, `manifest.webmanifest`,
+   `service-worker.js`, `DEPLOY.md`, and the four `.png` icon files).
+   Commit the upload to the `main` branch.
 3. Go to **Settings → Pages** in that repository. Under "Build and
    deployment", set Source to **Deploy from a branch**, branch **main**,
    folder **/ (root)**, then Save.

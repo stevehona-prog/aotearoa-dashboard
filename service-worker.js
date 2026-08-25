@@ -1,16 +1,16 @@
 // Bump this string on every deploy you want viewers to pick up promptly.
 // It's what forces old caches to be thrown away — see the "activate" handler below.
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = `aotearoa-dashboard-${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/apple-touch-icon.png",
-  "./icons/favicon.png"
+  "./icon-192.png",
+  "./icon-512.png",
+  "./apple-touch-icon.png",
+  "./favicon.png"
 ];
 
 self.addEventListener("install", (event) => {
