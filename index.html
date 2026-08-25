@@ -550,7 +550,7 @@
   //    Google account under Test users, or publish the app.
   // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
   var GMAIL_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
-  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send';
   var GMAIL_MAX_RESULTS = 5;
 
   (function () {
@@ -667,6 +667,24 @@
       });
     }
 
+    function rowHeaderHtml(stub) {
+      var readIcon = stub.unread
+        ? '<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m8.5 12.3 2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      return (
+        '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(stub.id) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
+          '<div style="font-size:13px;font-weight:' + (stub.unread ? '700' : '500') + ';">' + escapeHtml(stub.from) + '</div>' +
+          '<div style="font-size:12.5px;color:oklch(30% 0.02 40);margin-top:2px;">' + escapeHtml(stub.subject) + '</div>' +
+          '<div style="font-size:11px;color:oklch(46% 0.02 60);margin-top:3px;">' + stub.when + '</div>' +
+        '</a>' +
+        '<div style="display:flex;gap:6px;flex:none;">' +
+          '<span class="icobtn" data-action="toggle-read" title="' + (stub.unread ? 'Mark as read' : 'Mark as unread') + '" style="cursor:pointer;">' + readIcon + '</span>' +
+          '<span class="icobtn" data-action="reply" title="Reply" style="cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 9h10a6 6 0 0 1 6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>' +
+          '<span class="icobtn" data-action="forward" title="Forward" style="cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 9H10a6 6 0 0 0-6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>' +
+        '</div>'
+      );
+    }
+
     function renderMessages(messages) {
       messageStubs = {};
       if (!messages.length) {
@@ -675,24 +693,18 @@
       }
       rowsEl.innerHTML = messages.map(function (m) {
         var headers = (m.payload && m.payload.headers) || [];
-        var subject = headerValue(headers, 'Subject') || '(no subject)';
-        var from = fromName(headerValue(headers, 'From'));
-        var when = relativeTime(Number(m.internalDate));
-        var unread = (m.labelIds || []).indexOf('UNREAD') !== -1;
-        messageStubs[m.id] = { id: m.id, threadId: m.threadId };
+        var stub = {
+          id: m.id,
+          threadId: m.threadId,
+          subject: headerValue(headers, 'Subject') || '(no subject)',
+          from: fromName(headerValue(headers, 'From')),
+          when: relativeTime(Number(m.internalDate)),
+          unread: (m.labelIds || []).indexOf('UNREAD') !== -1
+        };
+        messageStubs[m.id] = stub;
         return (
           '<div class="rowline" data-msg-id="' + m.id + '">' +
-            '<div style="display:flex;justify-content:space-between;gap:10px;">' +
-              '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(m.id) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
-                '<div style="font-size:13px;font-weight:' + (unread ? '700' : '500') + ';">' + escapeHtml(from) + '</div>' +
-                '<div style="font-size:12.5px;color:oklch(30% 0.02 40);margin-top:2px;">' + escapeHtml(subject) + '</div>' +
-                '<div style="font-size:11px;color:oklch(46% 0.02 60);margin-top:3px;">' + when + '</div>' +
-              '</a>' +
-              '<div style="display:flex;gap:6px;flex:none;">' +
-                '<span class="icobtn" data-action="reply" title="Reply" style="cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 9h10a6 6 0 0 1 6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>' +
-                '<span class="icobtn" data-action="forward" title="Forward" style="cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 9H10a6 6 0 0 0-6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>' +
-              '</div>' +
-            '</div>' +
+            '<div class="row-header" style="display:flex;justify-content:space-between;gap:10px;">' + rowHeaderHtml(stub) + '</div>' +
             '<div class="email-compose" style="display:none;margin-top:10px;padding:10px;border:1px solid oklch(88% 0.02 70);border-radius:8px;background:oklch(99% 0.004 80);"></div>' +
           '</div>'
         );
@@ -798,6 +810,22 @@
       });
     }
 
+    function toggleRead(row, stub, btn) {
+      var makeUnread = !stub.unread;
+      btn.style.opacity = '0.4';
+      gmailFetch('messages/' + stub.id + '/modify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeUnread ? { addLabelIds: ['UNREAD'] } : { removeLabelIds: ['UNREAD'] })
+      }).then(function () {
+        stub.unread = makeUnread;
+        row.querySelector('.row-header').innerHTML = rowHeaderHtml(stub);
+      }).catch(function (err) {
+        console.error('Gmail mark read/unread failed:', err);
+        btn.style.opacity = '';
+      });
+    }
+
     rowsEl.addEventListener('click', function (e) {
       var btn = e.target.closest && e.target.closest('.icobtn[data-action]');
       if (!btn) return;
@@ -805,7 +833,9 @@
       var row = btn.closest('.rowline');
       var stub = row && messageStubs[row.getAttribute('data-msg-id')];
       if (!stub) return;
-      openCompose(btn.getAttribute('data-action'), row, stub);
+      var action = btn.getAttribute('data-action');
+      if (action === 'toggle-read') { toggleRead(row, stub, btn); return; }
+      openCompose(action, row, stub);
     });
 
     function loadInbox(accessToken) {
@@ -862,11 +892,16 @@
 
     connectBtn.addEventListener('click', requestToken);
 
+    function hasRequiredScope(grantedScope) {
+      var granted = (grantedScope || '').split(' ');
+      return GMAIL_SCOPE.split(' ').every(function (s) { return granted.indexOf(s) !== -1; });
+    }
+
     if (configured) {
       var cachedToken = sessionStorage.getItem('gmail_token');
       var cachedExpiry = Number(sessionStorage.getItem('gmail_token_expiry') || 0);
       var cachedScope = sessionStorage.getItem('gmail_token_scope') || '';
-      if (cachedToken && Date.now() < cachedExpiry && cachedScope.indexOf('gmail.send') !== -1) {
+      if (cachedToken && Date.now() < cachedExpiry && hasRequiredScope(cachedScope)) {
         loadInbox(cachedToken);
       }
     }
