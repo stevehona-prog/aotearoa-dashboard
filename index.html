@@ -940,11 +940,11 @@
       if (!subEl) return;
       Promise.all([
         gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:unread newer_than:1d')),
-        gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:read subject:(renewal OR renewing OR subscription OR license OR licence)'))
+        gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:read newer_than:3m subject:(renewal OR renewing OR subscription OR license OR licence)'))
       ]).then(function (results) {
         var unread24h = results[0].resultSizeEstimate || 0;
         var renewalsRead = results[1].resultSizeEstimate || 0;
-        subEl.textContent = unread24h + ' unread in last 24h, ' + renewalsRead + ' renewal' + (renewalsRead === 1 ? '' : 's') + ' read';
+        subEl.textContent = unread24h + ' unread in last 24h, ' + renewalsRead + ' renewal' + (renewalsRead === 1 ? '' : 's') + ' read (3mo)';
       }).catch(function (err) {
         console.error('Email highlight fetch failed:', err);
       });
