@@ -1017,12 +1017,12 @@
       var subEl = document.getElementById('highlight-email-sub');
       if (!subEl) return;
       Promise.all([
-        countMatches('in:inbox is:unread newer_than:1d'),
+        countMatches('in:inbox is:unread newer_than:2d'),
         countMatches('in:inbox is:unread newer_than:3m subject:(renewal OR renewing OR subscription OR license OR licence)')
       ]).then(function (results) {
-        var unread24h = results[0];
+        var unread2d = results[0];
         var renewals = results[1];
-        subEl.textContent = unread24h.label + ' unread in last 24h, ' + renewals.label + ' renewal' + (renewals.count === 1 ? '' : 's') + ' unread (3mo)';
+        subEl.textContent = unread2d.label + ' unread in last 2 days, ' + renewals.label + ' renewal' + (renewals.count === 1 ? '' : 's') + ' unread (3mo)';
       }).catch(function (err) {
         console.error('Email highlight fetch failed:', err);
       });

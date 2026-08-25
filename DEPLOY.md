@@ -92,7 +92,7 @@ One-time setup, all in [Google Cloud Console](https://console.cloud.google.com/)
      or Enter — Google parses the text into a real event on your calendar
      and the list refreshes.
    - The Email and Calendar tiles up in **Today's Highlights** update too
-     — Email shows unread count in the last 24h and how many unread
+     — Email shows unread count in the last 2 days and how many unread
      messages from the last 3 months look like renewals (subject contains
      "renewal", "subscription", "license"/"licence", etc.), Calendar shows
      your next upcoming event. Both tiles are clickable and jump straight
