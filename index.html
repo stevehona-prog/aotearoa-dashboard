@@ -548,11 +548,12 @@
     });
   }
 
-  // --- Google sign-in: client-side OAuth, no backend, shared by Gmail and ---
-  // --- Calendar below. ---
-  // 1. In Google Cloud Console, enable the Gmail API and the Google Calendar
-  //    API, and create one OAuth 2.0 Client ID (Application type: Web
-  //    application) — the same client can request tokens for both APIs.
+  // --- Google sign-in: client-side OAuth, no backend. One shared consent
+  // covers Gmail, Contacts and Calendar below — sign in once via either
+  // panel's Connect button and both panels populate. ---
+  // 1. In Google Cloud Console, enable the Gmail API, the Google Calendar
+  //    API, and the People API, and create one OAuth 2.0 Client ID
+  //    (Application type: Web application).
   // 2. Add this page's exact URL (e.g. https://<you>.github.io) — and
   //    http://localhost:8000 if you test locally — as an Authorized
   //    JavaScript origin. No redirect URI or client secret is needed.
@@ -560,8 +561,77 @@
   //    Google account under Test users, or publish the app.
   // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
   var GOOGLE_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
-  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/contacts.readonly';
+  var GOOGLE_SCOPE = [
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/contacts.readonly',
+    'https://www.googleapis.com/auth/calendar.events'
+  ].join(' ');
   var GMAIL_MAX_RESULTS = 5;
+
+  var GoogleAuth = (function () {
+    var configured = GOOGLE_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
+    var tokenClient = null;
+    var token = null;
+    var listeners = [];
+
+    function hasRequiredScope(grantedScope) {
+      var granted = (grantedScope || '').split(' ');
+      return GOOGLE_SCOPE.split(' ').every(function (s) { return granted.indexOf(s) !== -1; });
+    }
+
+    if (configured) {
+      var cachedToken = sessionStorage.getItem('google_token');
+      var cachedExpiry = Number(sessionStorage.getItem('google_token_expiry') || 0);
+      var cachedScope = sessionStorage.getItem('google_token_scope') || '';
+      if (cachedToken && Date.now() < cachedExpiry && hasRequiredScope(cachedScope)) {
+        token = cachedToken;
+      }
+    }
+
+    function notify(t) {
+      listeners.forEach(function (fn) { fn(t); });
+    }
+
+    function requestToken() {
+      if (!configured) {
+        alert('Add your Google OAuth Client ID to GOOGLE_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
+        return;
+      }
+      if (!window.google || !google.accounts || !google.accounts.oauth2) {
+        alert('Still loading Google sign-in — try again in a moment.');
+        return;
+      }
+      if (!tokenClient) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: GOOGLE_SCOPE,
+          callback: function (resp) {
+            if (resp && resp.access_token) {
+              token = resp.access_token;
+              sessionStorage.setItem('google_token', token);
+              sessionStorage.setItem('google_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
+              sessionStorage.setItem('google_token_scope', resp.scope || '');
+              notify(token);
+            } else {
+              console.error('Google auth failed:', resp);
+              notify(null);
+            }
+          }
+        });
+      }
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    return {
+      configured: configured,
+      requestToken: requestToken,
+      onToken: function (fn) {
+        listeners.push(fn);
+        if (token) fn(token);
+      }
+    };
+  })();
 
   (function () {
     var connectBtn = document.getElementById('email-connect-btn');
@@ -570,8 +640,6 @@
     var badgeEl = document.getElementById('email-badge');
     if (!connectBtn || !rowsEl || !badgeEl) return;
 
-    var configured = GOOGLE_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
-    var tokenClient = null;
     var currentToken = null;
     var messageStubs = {};  // id -> { id, threadId } from the inbox list
     var detailCache = {};   // id -> full headers + body, fetched lazily for reply/forward
@@ -969,62 +1037,25 @@
         .catch(function (err) {
           console.error('Gmail fetch failed:', err);
           setBadge('Error', false);
-          sessionStorage.removeItem('gmail_token');
-          sessionStorage.removeItem('gmail_token_expiry');
-          sessionStorage.removeItem('gmail_token_scope');
+          sessionStorage.removeItem('google_token');
+          sessionStorage.removeItem('google_token_expiry');
+          sessionStorage.removeItem('google_token_scope');
         });
     }
 
-    function requestToken() {
-      if (!configured) {
-        alert('Add your Google OAuth Client ID to GOOGLE_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
-        return;
-      }
-      if (!window.google || !google.accounts || !google.accounts.oauth2) {
-        alert('Still loading Google sign-in — try again in a moment.');
-        return;
-      }
-      if (!tokenClient) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: GMAIL_SCOPE,
-          callback: function (resp) {
-            if (resp && resp.access_token) {
-              sessionStorage.setItem('gmail_token', resp.access_token);
-              sessionStorage.setItem('gmail_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
-              sessionStorage.setItem('gmail_token_scope', resp.scope || '');
-              loadInbox(resp.access_token);
-            } else {
-              console.error('Gmail auth failed:', resp);
-              setBadge('Not connected', false);
-            }
-          }
-        });
-      }
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    }
+    connectBtn.addEventListener('click', GoogleAuth.requestToken);
 
-    connectBtn.addEventListener('click', requestToken);
-
-    function hasRequiredScope(grantedScope) {
-      var granted = (grantedScope || '').split(' ');
-      return GMAIL_SCOPE.split(' ').every(function (s) { return granted.indexOf(s) !== -1; });
-    }
-
-    if (configured) {
-      var cachedToken = sessionStorage.getItem('gmail_token');
-      var cachedExpiry = Number(sessionStorage.getItem('gmail_token_expiry') || 0);
-      var cachedScope = sessionStorage.getItem('gmail_token_scope') || '';
-      if (cachedToken && Date.now() < cachedExpiry && hasRequiredScope(cachedScope)) {
-        loadInbox(cachedToken);
+    GoogleAuth.onToken(function (token) {
+      if (token) {
+        loadInbox(token);
+      } else {
+        setBadge('Not connected', false);
       }
-    }
+    });
   })();
 
-  // --- Google Calendar: same client-side OAuth pattern as Gmail above,
-  // but its own sign-in (separate scope, separate cached session) so
-  // connecting one doesn't silently grant access to the other. ---
-  var CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+  // --- Google Calendar: shares GoogleAuth's single sign-in with Gmail
+  // above (same combined scope, same cached session). ---
   var CALENDAR_MAX_RESULTS = 5;
 
   (function () {
@@ -1037,8 +1068,6 @@
     var quickStatus = document.getElementById('calendar-quickadd-status');
     if (!connectBtn || !rowsEl || !badgeEl) return;
 
-    var configured = GOOGLE_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
-    var tokenClient = null;
     var currentToken = null;
 
     function setBadge(text, live) {
@@ -1139,9 +1168,9 @@
         .catch(function (err) {
           console.error('Calendar fetch failed:', err);
           setBadge('Error', false);
-          sessionStorage.removeItem('calendar_token');
-          sessionStorage.removeItem('calendar_token_expiry');
-          sessionStorage.removeItem('calendar_token_scope');
+          sessionStorage.removeItem('google_token');
+          sessionStorage.removeItem('google_token_expiry');
+          sessionStorage.removeItem('google_token_scope');
         });
     }
 
@@ -1173,45 +1202,15 @@
       if (e.key === 'Enter') { e.preventDefault(); quickAdd(); }
     });
 
-    function requestToken() {
-      if (!configured) {
-        alert('Add your Google OAuth Client ID to GOOGLE_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
-        return;
-      }
-      if (!window.google || !google.accounts || !google.accounts.oauth2) {
-        alert('Still loading Google sign-in — try again in a moment.');
-        return;
-      }
-      if (!tokenClient) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: CALENDAR_SCOPE,
-          callback: function (resp) {
-            if (resp && resp.access_token) {
-              sessionStorage.setItem('calendar_token', resp.access_token);
-              sessionStorage.setItem('calendar_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
-              sessionStorage.setItem('calendar_token_scope', resp.scope || '');
-              loadEvents(resp.access_token);
-            } else {
-              console.error('Calendar auth failed:', resp);
-              setBadge('Not connected', false);
-            }
-          }
-        });
-      }
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    }
+    connectBtn.addEventListener('click', GoogleAuth.requestToken);
 
-    connectBtn.addEventListener('click', requestToken);
-
-    if (configured) {
-      var cachedToken = sessionStorage.getItem('calendar_token');
-      var cachedExpiry = Number(sessionStorage.getItem('calendar_token_expiry') || 0);
-      var cachedScope = sessionStorage.getItem('calendar_token_scope') || '';
-      if (cachedToken && Date.now() < cachedExpiry && cachedScope.indexOf('calendar.events') !== -1) {
-        loadEvents(cachedToken);
+    GoogleAuth.onToken(function (token) {
+      if (token) {
+        loadEvents(token);
+      } else {
+        setBadge('Not connected', false);
       }
-    }
+    });
   })();
 </script>
 

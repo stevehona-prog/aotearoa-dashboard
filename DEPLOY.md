@@ -59,10 +59,10 @@ phase will plug into.
 ## Connecting Gmail and Google Calendar
 
 Both panels talk to Google directly from the browser — no backend required
-— using Google's OAuth sign-in. They share one Client ID but sign in
-separately (Connect Gmail and Connect Calendar are independent buttons, so
-connecting one doesn't hand the other panel access). One-time setup, all in
-[Google Cloud Console](https://console.cloud.google.com/):
+— using Google's OAuth sign-in, and share a single sign-in: click **either**
+Connect Gmail or Connect Calendar and one Google consent screen covers
+both panels at once (plus contact search) — there's no second prompt.
+One-time setup, all in [Google Cloud Console](https://console.cloud.google.com/):
 
 1. Create a project (or pick an existing one).
 2. **APIs & Services → Library** — search for and enable the **Gmail
@@ -83,35 +83,35 @@ connecting one doesn't hand the other panel access). One-time setup, all in
 6. Open `index.html`, find `GOOGLE_CLIENT_ID` near the bottom (search for
    `REPLACE_WITH_YOUR_CLIENT_ID`), and paste your Client ID in — it covers
    both panels.
-7. Deploy the change. On the live page:
-   - Click **Connect Gmail** in the Email card — shows your 5 most recent
-     inbox messages with a "Live" badge, reply/forward icons, and a circle
-     icon to toggle read/unread.
-   - Click **Connect Calendar** in the Calendar card — shows your next 5
-     upcoming events. Type into "Quick add an event…" (e.g. "Dinner with
-     Sarah tomorrow 7pm") and hit the + button or Enter — Google parses the
-     text into a real event on your calendar and the list refreshes.
-   - Once connected, the Email and Calendar tiles up in **Today's
-     Highlights** update too — Email shows unread count in the last 24h
-     and how many messages from the last 3 months are already read and
-     look like renewals (subject contains "renewal", "subscription",
-     "license"/"licence", etc.), Calendar shows your next upcoming event.
-     Both tiles are clickable and jump straight down to their panel.
+7. Deploy the change. On the live page, click **either** Connect Gmail or
+   Connect Calendar — one sign-in, and both panels populate:
+   - Email shows your 5 most recent inbox messages with a "Live" badge,
+     reply/forward icons, and a circle icon to toggle read/unread.
+   - Calendar shows your next 5 upcoming events. Type into "Quick add an
+     event…" (e.g. "Dinner with Sarah tomorrow 7pm") and hit the + button
+     or Enter — Google parses the text into a real event on your calendar
+     and the list refreshes.
+   - The Email and Calendar tiles up in **Today's Highlights** update too
+     — Email shows unread count in the last 24h and how many messages
+     from the last 3 months are already read and look like renewals
+     (subject contains "renewal", "subscription", "license"/"licence",
+     etc.), Calendar shows your next upcoming event. Both tiles are
+     clickable and jump straight down to their panel.
 
 The Client ID isn't a secret (it's fine to be in the page source — Google
 doesn't accept requests from it unless they come from an authorized
-origin). No client secret or refresh token is ever used or stored; each
-panel's access token lives only in that browser tab's `sessionStorage` and
-expires after about an hour, after which clicking that panel's Connect
-button again re-authorizes it.
+origin). No client secret or refresh token is ever used or stored; the
+single shared access token lives only in that browser tab's
+`sessionStorage` and expires after about an hour, after which clicking
+either panel's Connect button again re-authorizes both.
 
-Gmail sign-in requests `gmail.modify` (to show the inbox and toggle
-read/unread), `gmail.send` (to reply/forward), and `contacts.readonly` (to
-search your contacts when typing a forward recipient). Calendar sign-in
-requests `calendar.events` (to show upcoming events and create new ones).
-Each time a new capability is added, the relevant scope list changes, and
-any previously cached session only has the old scopes — click that
-panel's Connect button again once to re-consent to the current set.
+The one sign-in requests every scope both panels need together:
+`gmail.modify` (inbox + toggle read/unread), `gmail.send`
+(reply/forward), `contacts.readonly` (contact search when forwarding),
+and `calendar.events` (upcoming events + creating new ones). If a future
+change adds another capability, the combined scope list changes and the
+cached session only has the old scopes — click either Connect button
+again once to re-consent to the current set.
 
 Contact search in the Forward "To" field starts suggesting matches after
 2 characters, searching both name and email against your Google Contacts
