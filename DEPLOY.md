@@ -4,6 +4,20 @@ This folder is a complete, ready-to-host static site: `index.html`, the PWA
 manifest, a service worker, and the app icons. No build step, no
 dependencies — GitHub Pages just needs to serve these files as-is.
 
+## Colour scheme
+
+The dashboard runs "Bottle Green Dusk" — a dark bottle-green ground with an
+ochre accent (replacing the earlier terracotta/cream palette) and emerald
+for live/connected states. One rule carries through every panel: **any card
+still showing sample or unconnected data gets a muted terracotta
+background** instead of the standard dark-green card surface — News,
+Sports, Real Estate, Product Research, and the three sample widgets are
+always terracotta; Email and Calendar switch from terracotta to green
+automatically once you connect them (both the panel and its "Today's
+Highlights" tile). It's a from-scratch colour pass — if you spot a badge or
+accent that still reads oddly on the dark ground, flag it and it's a quick
+fix, not a redesign.
+
 ## First-time setup (all through github.com, no command line needed)
 
 1. Go to github.com and create a new repository — for example
