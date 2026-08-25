@@ -79,7 +79,8 @@ Cloud Console](https://console.cloud.google.com/):
    `REPLACE_WITH_YOUR_CLIENT_ID`), and paste your Client ID in.
 7. Deploy the change. On the live page, click **Connect Gmail** in the
    Email card and sign in — it'll show your 5 most recent inbox messages
-   with a "Live" badge.
+   with a "Live" badge, and reply/forward icons on each row for replying
+   or forwarding without leaving the dashboard.
 
 The Client ID isn't a secret (it's fine to be in the page source — Google
 doesn't accept requests from it unless they come from an authorized
@@ -87,3 +88,9 @@ origin). No client secret or refresh token is ever used or stored; the
 access token lives only in that browser tab's `sessionStorage` and expires
 after about an hour, after which clicking Connect Gmail again re-authorizes
 it.
+
+Sign-in requests both `gmail.readonly` (to show the inbox) and
+`gmail.send` (to reply/forward) scopes together. If you connected before
+reply/forward was added, click **Connect Gmail** again once — the old
+cached session only has the read scope, so it won't send until you
+re-consent to both.

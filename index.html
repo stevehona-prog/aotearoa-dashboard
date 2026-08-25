@@ -550,7 +550,7 @@
   //    Google account under Test users, or publish the app.
   // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
   var GMAIL_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
-  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
   var GMAIL_MAX_RESULTS = 5;
 
   (function () {
@@ -562,6 +562,9 @@
 
     var configured = GMAIL_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
     var tokenClient = null;
+    var currentToken = null;
+    var messageStubs = {};  // id -> { id, threadId } from the inbox list
+    var detailCache = {};   // id -> full headers + body, fetched lazily for reply/forward
 
     function setBadge(text, live) {
       badgeEl.textContent = text;
@@ -596,7 +599,76 @@
       return name || fromHeader || 'Unknown sender';
     }
 
+    function fromEmail(fromHeader) {
+      var match = fromHeader.match(/<([^>]+)>/);
+      return match ? match[1] : fromHeader;
+    }
+
+    function gmailFetch(path, opts) {
+      opts = opts || {};
+      var headers = { Authorization: 'Bearer ' + currentToken };
+      for (var k in opts.headers) headers[k] = opts.headers[k];
+      opts.headers = headers;
+      return fetch('https://gmail.googleapis.com/gmail/v1/users/me/' + path, opts).then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error('Gmail API ' + res.status + ': ' + t); });
+        return res.json();
+      });
+    }
+
+    function base64UrlEncode(str) {
+      var b64 = btoa(unescape(encodeURIComponent(str)));
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function base64UrlDecode(str) {
+      var b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      try { return decodeURIComponent(escape(atob(b64))); } catch (e) { return atob(b64); }
+    }
+
+    function findPlainTextBody(payload) {
+      if (!payload) return '';
+      if (payload.mimeType === 'text/plain' && payload.body && payload.body.data) {
+        return base64UrlDecode(payload.body.data);
+      }
+      if (payload.parts) {
+        for (var i = 0; i < payload.parts.length; i++) {
+          var found = findPlainTextBody(payload.parts[i]);
+          if (found) return found;
+        }
+      }
+      if (payload.mimeType === 'text/html' && payload.body && payload.body.data) {
+        return base64UrlDecode(payload.body.data).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+      return '';
+    }
+
+    function quoteLines(text) {
+      return text.split('\n').map(function (l) { return '> ' + l; }).join('\n');
+    }
+
+    function getDetail(id) {
+      if (detailCache[id]) return Promise.resolve(detailCache[id]);
+      return gmailFetch('messages/' + id + '?format=full').then(function (m) {
+        var headers = (m.payload && m.payload.headers) || [];
+        var detail = {
+          id: m.id,
+          threadId: m.threadId,
+          subject: headerValue(headers, 'Subject') || '(no subject)',
+          from: headerValue(headers, 'From') || '',
+          to: headerValue(headers, 'To') || '',
+          messageId: headerValue(headers, 'Message-ID') || '',
+          references: headerValue(headers, 'References') || '',
+          date: headerValue(headers, 'Date') || '',
+          body: findPlainTextBody(m.payload) || m.snippet || ''
+        };
+        detailCache[id] = detail;
+        return detail;
+      });
+    }
+
     function renderMessages(messages) {
+      messageStubs = {};
       if (!messages.length) {
         rowsEl.innerHTML = '<div style="font-size:12.5px;color:oklch(46% 0.02 60);">Inbox is empty.</div>';
         return;
@@ -607,32 +679,143 @@
         var from = fromName(headerValue(headers, 'From'));
         var when = relativeTime(Number(m.internalDate));
         var unread = (m.labelIds || []).indexOf('UNREAD') !== -1;
+        messageStubs[m.id] = { id: m.id, threadId: m.threadId };
         return (
-          '<div class="rowline" style="display:flex;justify-content:space-between;gap:10px;">' +
-            '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(m.id) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
-              '<div style="font-size:13px;font-weight:' + (unread ? '700' : '500') + ';">' + escapeHtml(from) + '</div>' +
-              '<div style="font-size:12.5px;color:oklch(30% 0.02 40);margin-top:2px;">' + escapeHtml(subject) + '</div>' +
-              '<div style="font-size:11px;color:oklch(46% 0.02 60);margin-top:3px;">' + when + '</div>' +
-            '</a>' +
+          '<div class="rowline" data-msg-id="' + m.id + '">' +
+            '<div style="display:flex;justify-content:space-between;gap:10px;">' +
+              '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(m.id) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
+                '<div style="font-size:13px;font-weight:' + (unread ? '700' : '500') + ';">' + escapeHtml(from) + '</div>' +
+                '<div style="font-size:12.5px;color:oklch(30% 0.02 40);margin-top:2px;">' + escapeHtml(subject) + '</div>' +
+                '<div style="font-size:11px;color:oklch(46% 0.02 60);margin-top:3px;">' + when + '</div>' +
+              '</a>' +
+              '<div style="display:flex;gap:6px;flex:none;">' +
+                '<span class="icobtn" data-action="reply" title="Reply" style="cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 9h10a6 6 0 0 1 6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>' +
+                '<span class="icobtn" data-action="forward" title="Forward" style="cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 9H10a6 6 0 0 0-6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="email-compose" style="display:none;margin-top:10px;padding:10px;border:1px solid oklch(88% 0.02 70);border-radius:8px;background:oklch(99% 0.004 80);"></div>' +
           '</div>'
         );
       }).join('');
     }
 
+    function composeFormHtml(mode, detail) {
+      var toValue = mode === 'reply' ? escapeHtml(fromEmail(detail.from)) : '';
+      var toReadonly = mode === 'reply' ? ' readonly' : '';
+      return (
+        '<div style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:oklch(46% 0.02 60);margin-bottom:6px;">' + (mode === 'reply' ? 'Reply' : 'Forward') + '</div>' +
+        '<input type="text" class="compose-to" placeholder="To" value="' + toValue + '"' + toReadonly + ' style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(85% 0.02 70);border-radius:6px;margin-bottom:6px;box-sizing:border-box;">' +
+        '<textarea class="compose-body" rows="4" placeholder="Write your message…" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(85% 0.02 70);border-radius:6px;box-sizing:border-box;resize:vertical;"></textarea>' +
+        '<div class="compose-status" style="font-size:11px;color:oklch(46% 0.02 60);margin-top:4px;min-height:14px;"></div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px;">' +
+          '<button type="button" class="compose-send" style="font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid oklch(46% 0.09 155);background:oklch(46% 0.09 155);color:oklch(98% 0.01 80);cursor:pointer;">Send</button>' +
+          '<button type="button" class="compose-cancel" style="font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid oklch(85% 0.02 70);background:oklch(98.5% 0.006 80);color:oklch(40% 0.02 60);cursor:pointer;">Cancel</button>' +
+        '</div>'
+      );
+    }
+
+    function closeCompose(row) {
+      var box = row.querySelector('.email-compose');
+      box.style.display = 'none';
+      box.removeAttribute('data-mode');
+      box.innerHTML = '';
+    }
+
+    function sendMessage(mode, detail, to, body) {
+      var subject = detail.subject || '(no subject)';
+      var lines = ['To: ' + to];
+      if (mode === 'reply') {
+        subject = /^re:/i.test(subject) ? subject : 'Re: ' + subject;
+        if (detail.messageId) {
+          lines.push('In-Reply-To: ' + detail.messageId);
+          lines.push('References: ' + (detail.references ? detail.references + ' ' : '') + detail.messageId);
+        }
+      } else {
+        subject = /^fwd:/i.test(subject) ? subject : 'Fwd: ' + subject;
+      }
+      lines.push('Subject: ' + subject);
+      lines.push('Content-Type: text/plain; charset="UTF-8"');
+      lines.push('MIME-Version: 1.0');
+      lines.push('');
+
+      var fullBody;
+      if (mode === 'reply') {
+        fullBody = body + '\n\nOn ' + detail.date + ', ' + fromName(detail.from) + ' wrote:\n' + quoteLines(detail.body || '');
+      } else {
+        fullBody = body + '\n\n---------- Forwarded message ---------\nFrom: ' + detail.from +
+          '\nDate: ' + detail.date + '\nSubject: ' + detail.subject + '\nTo: ' + detail.to +
+          '\n\n' + (detail.body || '');
+      }
+      lines.push(fullBody);
+
+      var payload = { raw: base64UrlEncode(lines.join('\r\n')) };
+      if (mode === 'reply' && detail.threadId) payload.threadId = detail.threadId;
+
+      return gmailFetch('messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    function openCompose(mode, row, stub) {
+      var box = row.querySelector('.email-compose');
+      if (box.style.display === 'block' && box.getAttribute('data-mode') === mode) {
+        closeCompose(row);
+        return;
+      }
+      box.style.display = 'block';
+      box.setAttribute('data-mode', mode);
+      box.innerHTML = '<div style="font-size:12px;color:oklch(46% 0.02 60);">Loading…</div>';
+      getDetail(stub.id).then(function (detail) {
+        box.innerHTML = composeFormHtml(mode, detail);
+        var toEl = box.querySelector('.compose-to');
+        var bodyEl = box.querySelector('.compose-body');
+        var statusEl = box.querySelector('.compose-status');
+        var sendBtn = box.querySelector('.compose-send');
+        var cancelBtn = box.querySelector('.compose-cancel');
+        cancelBtn.addEventListener('click', function () { closeCompose(row); });
+        sendBtn.addEventListener('click', function () {
+          var to = toEl.value.trim();
+          var body = bodyEl.value;
+          if (!to) { statusEl.textContent = 'Add a recipient first.'; return; }
+          if (!body.trim()) { statusEl.textContent = 'Write a message first.'; return; }
+          sendBtn.disabled = true;
+          statusEl.textContent = 'Sending…';
+          sendMessage(mode, detail, to, body).then(function () {
+            statusEl.textContent = 'Sent.';
+            setTimeout(function () { closeCompose(row); }, 900);
+          }).catch(function (err) {
+            console.error('Gmail send failed:', err);
+            sendBtn.disabled = false;
+            statusEl.textContent = 'Failed to send — see console.';
+          });
+        });
+        bodyEl.focus();
+      }).catch(function (err) {
+        console.error('Gmail detail fetch failed:', err);
+        box.innerHTML = '<div style="font-size:12px;color:oklch(52% 0.16 35);">Couldn’t load message — see console.</div>';
+      });
+    }
+
+    rowsEl.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('.icobtn[data-action]');
+      if (!btn) return;
+      e.preventDefault();
+      var row = btn.closest('.rowline');
+      var stub = row && messageStubs[row.getAttribute('data-msg-id')];
+      if (!stub) return;
+      openCompose(btn.getAttribute('data-action'), row, stub);
+    });
+
     function loadInbox(accessToken) {
-      var listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX';
-      fetch(listUrl, { headers: { Authorization: 'Bearer ' + accessToken } })
-        .then(function (res) {
-          if (!res.ok) throw new Error('list failed: ' + res.status);
-          return res.json();
-        })
+      currentToken = accessToken;
+      gmailFetch('messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX')
         .then(function (data) {
           var ids = (data.messages || []).map(function (m) { return m.id; });
           if (!ids.length) { renderMessages([]); setBadge('Live', true); return; }
           return Promise.all(ids.map(function (id) {
-            var url = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id +
-              '?format=metadata&metadataHeaders=From&metadataHeaders=Subject';
-            return fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } }).then(function (r) { return r.json(); });
+            return gmailFetch('messages/' + id + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject');
           })).then(function (msgs) {
             renderMessages(msgs);
             setBadge('Live', true);
@@ -644,6 +827,7 @@
           setBadge('Error', false);
           sessionStorage.removeItem('gmail_token');
           sessionStorage.removeItem('gmail_token_expiry');
+          sessionStorage.removeItem('gmail_token_scope');
         });
     }
 
@@ -664,6 +848,7 @@
             if (resp && resp.access_token) {
               sessionStorage.setItem('gmail_token', resp.access_token);
               sessionStorage.setItem('gmail_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
+              sessionStorage.setItem('gmail_token_scope', resp.scope || '');
               loadInbox(resp.access_token);
             } else {
               console.error('Gmail auth failed:', resp);
@@ -680,7 +865,8 @@
     if (configured) {
       var cachedToken = sessionStorage.getItem('gmail_token');
       var cachedExpiry = Number(sessionStorage.getItem('gmail_token_expiry') || 0);
-      if (cachedToken && Date.now() < cachedExpiry) {
+      var cachedScope = sessionStorage.getItem('gmail_token_scope') || '';
+      if (cachedToken && Date.now() < cachedExpiry && cachedScope.indexOf('gmail.send') !== -1) {
         loadInbox(cachedToken);
       }
     }
