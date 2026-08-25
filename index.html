@@ -1003,16 +1003,26 @@
       openCompose(action, row, stub);
     });
 
+    function countMatches(query) {
+      // resultSizeEstimate is a rough approximation (worse still at
+      // maxResults=1) and doesn't reliably reflect the query filters, so
+      // count actual returned message ids instead.
+      return gmailFetch('messages?maxResults=500&q=' + encodeURIComponent(query)).then(function (data) {
+        var count = (data.messages || []).length;
+        return { count: count, label: data.nextPageToken ? (count + '+') : String(count) };
+      });
+    }
+
     function updateHighlight() {
       var subEl = document.getElementById('highlight-email-sub');
       if (!subEl) return;
       Promise.all([
-        gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:unread newer_than:1d')),
-        gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:read newer_than:3m subject:(renewal OR renewing OR subscription OR license OR licence)'))
+        countMatches('in:inbox is:unread newer_than:1d'),
+        countMatches('in:inbox is:unread newer_than:3m subject:(renewal OR renewing OR subscription OR license OR licence)')
       ]).then(function (results) {
-        var unread24h = results[0].resultSizeEstimate || 0;
-        var renewalsRead = results[1].resultSizeEstimate || 0;
-        subEl.textContent = unread24h + ' unread in last 24h, ' + renewalsRead + ' renewal' + (renewalsRead === 1 ? '' : 's') + ' read (3mo)';
+        var unread24h = results[0];
+        var renewals = results[1];
+        subEl.textContent = unread24h.label + ' unread in last 24h, ' + renewals.label + ' renewal' + (renewals.count === 1 ? '' : 's') + ' unread (3mo)';
       }).catch(function (err) {
         console.error('Email highlight fetch failed:', err);
       });
