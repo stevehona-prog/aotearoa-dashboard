@@ -559,7 +559,7 @@
   //    Google account under Test users, or publish the app.
   // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
   var GOOGLE_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
-  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send';
+  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/contacts.readonly';
   var GMAIL_MAX_RESULTS = 5;
 
   (function () {
@@ -622,6 +622,42 @@
         if (!res.ok) return res.text().then(function (t) { throw new Error('Gmail API ' + res.status + ': ' + t); });
         return res.json();
       });
+    }
+
+    function peopleFetch(path, opts) {
+      opts = opts || {};
+      var headers = { Authorization: 'Bearer ' + currentToken };
+      for (var k in opts.headers) headers[k] = opts.headers[k];
+      opts.headers = headers;
+      return fetch('https://people.googleapis.com/v1/' + path, opts).then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error('People API ' + res.status + ': ' + t); });
+        return res.json();
+      });
+    }
+
+    function warmContactsCache() {
+      peopleFetch('people/me/connections?personFields=names,emailAddresses&pageSize=1').catch(function () {});
+    }
+
+    function debounce(fn, delay) {
+      var timer;
+      return function () {
+        var args = arguments;
+        clearTimeout(timer);
+        timer = setTimeout(function () { fn.apply(null, args); }, delay);
+      };
+    }
+
+    function searchContacts(query) {
+      return peopleFetch('people:searchContacts?query=' + encodeURIComponent(query) + '&readMask=names,emailAddresses&pageSize=5')
+        .then(function (data) {
+          return (data.results || []).map(function (r) {
+            var p = r.person || {};
+            var name = (p.names && p.names[0] && p.names[0].displayName) || '';
+            var email = p.emailAddresses && p.emailAddresses[0] && p.emailAddresses[0].value;
+            return email ? { name: name, email: email } : null;
+          }).filter(Boolean);
+        });
     }
 
     function base64UrlEncode(str) {
@@ -725,7 +761,10 @@
       var toReadonly = mode === 'reply' ? ' readonly' : '';
       return (
         '<div style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:oklch(46% 0.02 60);margin-bottom:6px;">' + (mode === 'reply' ? 'Reply' : 'Forward') + '</div>' +
-        '<input type="text" class="compose-to" placeholder="To" value="' + toValue + '"' + toReadonly + ' style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(85% 0.02 70);border-radius:6px;margin-bottom:6px;box-sizing:border-box;">' +
+        '<div style="position:relative;margin-bottom:6px;">' +
+          '<input type="text" class="compose-to" placeholder="To" value="' + toValue + '"' + toReadonly + ' autocomplete="off" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(85% 0.02 70);border-radius:6px;box-sizing:border-box;">' +
+          '<div class="compose-to-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:5;background:oklch(99% 0.004 80);border:1px solid oklch(85% 0.02 70);border-radius:6px;margin-top:2px;max-height:160px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1);"></div>' +
+        '</div>' +
         '<textarea class="compose-body" rows="4" placeholder="Write your message…" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(85% 0.02 70);border-radius:6px;box-sizing:border-box;resize:vertical;"></textarea>' +
         '<div class="compose-status" style="font-size:11px;color:oklch(46% 0.02 60);margin-top:4px;min-height:14px;"></div>' +
         '<div style="display:flex;gap:8px;margin-top:8px;">' +
@@ -791,13 +830,61 @@
       getDetail(stub.id).then(function (detail) {
         box.innerHTML = composeFormHtml(mode, detail);
         var toEl = box.querySelector('.compose-to');
+        var suggestEl = box.querySelector('.compose-to-suggestions');
         var bodyEl = box.querySelector('.compose-body');
         var statusEl = box.querySelector('.compose-status');
         var sendBtn = box.querySelector('.compose-send');
         var cancelBtn = box.querySelector('.compose-cancel');
         cancelBtn.addEventListener('click', function () { closeCompose(row); });
+
+        if (!toEl.readOnly) {
+          var runContactSearch = debounce(function () {
+            var query = toEl.value.split(',').pop().trim();
+            if (query.length < 2) {
+              suggestEl.style.display = 'none';
+              suggestEl.innerHTML = '';
+              return;
+            }
+            searchContacts(query).then(function (matches) {
+              if (!matches.length) {
+                suggestEl.style.display = 'none';
+                suggestEl.innerHTML = '';
+                return;
+              }
+              suggestEl.innerHTML = matches.map(function (c) {
+                return '<div class="compose-to-suggestion" data-email="' + escapeHtml(c.email) + '" data-name="' + escapeHtml(c.name) + '" style="padding:6px 8px;font-size:12.5px;cursor:pointer;">' +
+                  (c.name ? '<strong>' + escapeHtml(c.name) + '</strong> ' : '') +
+                  '<span style="color:oklch(46% 0.02 60);">' + escapeHtml(c.email) + '</span>' +
+                '</div>';
+              }).join('');
+              suggestEl.style.display = 'block';
+            }).catch(function (err) {
+              console.error('Contacts search failed:', err);
+              suggestEl.style.display = 'none';
+            });
+          }, 250);
+          toEl.addEventListener('input', runContactSearch);
+          suggestEl.addEventListener('mousedown', function (e) {
+            var item = e.target.closest && e.target.closest('.compose-to-suggestion');
+            if (!item) return;
+            e.preventDefault();
+            var name = item.getAttribute('data-name');
+            var email = item.getAttribute('data-email');
+            var chosen = name ? name + ' <' + email + '>' : email;
+            var parts = toEl.value.split(',');
+            parts[parts.length - 1] = ' ' + chosen;
+            toEl.value = parts.map(function (p) { return p.trim(); }).join(', ') + ', ';
+            suggestEl.style.display = 'none';
+            suggestEl.innerHTML = '';
+            toEl.focus();
+          });
+          toEl.addEventListener('blur', function () {
+            setTimeout(function () { suggestEl.style.display = 'none'; }, 150);
+          });
+        }
+
         sendBtn.addEventListener('click', function () {
-          var to = toEl.value.trim();
+          var to = toEl.value.trim().replace(/,\s*$/, '');
           var body = bodyEl.value;
           if (!to) { statusEl.textContent = 'Add a recipient first.'; return; }
           if (!body.trim()) { statusEl.textContent = 'Write a message first.'; return; }
@@ -849,6 +936,7 @@
 
     function loadInbox(accessToken) {
       currentToken = accessToken;
+      warmContactsCache();
       gmailFetch('messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX')
         .then(function (data) {
           var ids = (data.messages || []).map(function (m) { return m.id; });

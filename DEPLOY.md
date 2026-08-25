@@ -65,8 +65,9 @@ connecting one doesn't hand the other panel access). One-time setup, all in
 [Google Cloud Console](https://console.cloud.google.com/):
 
 1. Create a project (or pick an existing one).
-2. **APIs & Services → Library** — search for and enable both the **Gmail
-   API** and the **Google Calendar API**.
+2. **APIs & Services → Library** — search for and enable the **Gmail
+   API**, the **Google Calendar API**, and the **People API** (the last one
+   powers contact search when forwarding an email).
 3. **APIs & Services → OAuth consent screen** — set it up as **External**,
    fill in the required fields. While it's in "Testing" status, add your
    own Gmail address under **Test users** (only test users can sign in
@@ -99,8 +100,16 @@ expires after about an hour, after which clicking that panel's Connect
 button again re-authorizes it.
 
 Gmail sign-in requests `gmail.modify` (to show the inbox and toggle
-read/unread) and `gmail.send` (to reply/forward) together. Calendar
-sign-in requests `calendar.events` (to show upcoming events and create new
-ones). Each time a new capability is added, the relevant scope list
-changes, and any previously cached session only has the old scopes — click
-that panel's Connect button again once to re-consent to the current set.
+read/unread), `gmail.send` (to reply/forward), and `contacts.readonly` (to
+search your contacts when typing a forward recipient). Calendar sign-in
+requests `calendar.events` (to show upcoming events and create new ones).
+Each time a new capability is added, the relevant scope list changes, and
+any previously cached session only has the old scopes — click that
+panel's Connect button again once to re-consent to the current set.
+
+Contact search in the Forward "To" field starts suggesting matches after
+2 characters, searching both name and email against your Google Contacts
+(not Gmail's auto-collected "Other contacts" — just people you've actually
+saved). It can take a few seconds after first connecting for Google's
+contacts search index to warm up; if suggestions don't appear immediately
+after a fresh Connect Gmail, try again a moment later.
