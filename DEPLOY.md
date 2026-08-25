@@ -46,11 +46,44 @@ away.
 
 ## What's live vs. sample right now
 
-Only the Calendar panel shows real data (from a connected Google Calendar).
-Every other panel — news, sports, email, real estate, product research,
-widgets — is realistic sample content, laid out exactly where live data
-would go once those sources are wired up. That's the next phase of work,
-and it needs a small backend (to hold API keys, refresh data on a
-schedule, and — if you want settings or added widgets to follow you across
-devices — a place to store your account's preferences). This static site
-is the front end that phase will plug into.
+The Calendar panel shows real data (from a connected Google Calendar), and
+the Email panel can connect to your real Gmail inbox (see below). Every
+other panel — news, sports, real estate, product research, widgets — is
+realistic sample content, laid out exactly where live data would go once
+those sources are wired up. That's the next phase of work, and it needs a
+small backend (to hold API keys, refresh data on a schedule, and — if you
+want settings or added widgets to follow you across devices — a place to
+store your account's preferences). This static site is the front end that
+phase will plug into.
+
+## Connecting Gmail
+
+The Email panel talks to Gmail directly from the browser — no backend
+required — using Google's OAuth sign-in. One-time setup, all in [Google
+Cloud Console](https://console.cloud.google.com/):
+
+1. Create a project (or pick an existing one).
+2. **APIs & Services → Library** — search for "Gmail API" and enable it.
+3. **APIs & Services → OAuth consent screen** — set it up as **External**,
+   fill in the required fields. While it's in "Testing" status, add your
+   own Gmail address under **Test users** (only test users can sign in
+   until you publish it — that's fine for personal use).
+4. **APIs & Services → Credentials → Create Credentials → OAuth client
+   ID** — Application type **Web application**. Under **Authorized
+   JavaScript origins**, add your GitHub Pages URL exactly, e.g.
+   `https://<your-username>.github.io` (no trailing slash, no path). Add
+   `http://localhost:8000` too if you want to test locally by running
+   `python -m http.server` in this folder.
+5. Copy the generated Client ID (ends in `.apps.googleusercontent.com`).
+6. Open `index.html`, find `GMAIL_CLIENT_ID` near the bottom (search for
+   `REPLACE_WITH_YOUR_CLIENT_ID`), and paste your Client ID in.
+7. Deploy the change. On the live page, click **Connect Gmail** in the
+   Email card and sign in — it'll show your 5 most recent inbox messages
+   with a "Live" badge.
+
+The Client ID isn't a secret (it's fine to be in the page source — Google
+doesn't accept requests from it unless they come from an authorized
+origin). No client secret or refresh token is ever used or stored; the
+access token lives only in that browser tab's `sessionStorage` and expires
+after about an hour, after which clicking Connect Gmail again re-authorizes
+it.

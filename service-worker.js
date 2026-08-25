@@ -1,6 +1,6 @@
 // Bump this string on every deploy you want viewers to pick up promptly.
 // It's what forces old caches to be thrown away — see the "activate" handler below.
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `aotearoa-dashboard-${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
@@ -32,6 +32,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  // Leave cross-origin requests (Google sign-in, Gmail API) to the browser's
+  // normal fetch handling — they carry auth headers and must never be cached
+  // or served stale from here.
+  if (!request.url.startsWith(self.location.origin)) return;
 
   const isHTML =
     request.mode === "navigate" ||

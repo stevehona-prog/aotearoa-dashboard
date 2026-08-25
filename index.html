@@ -20,6 +20,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://accounts.google.com">
+<link rel="preconnect" href="https://gmail.googleapis.com">
 
 <style>
   * { box-sizing: border-box; }
@@ -234,10 +236,15 @@
           <svg width="20" height="20" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
           <h2 style="font-family:'Spectral',Georgia,serif;font-size:17px;font-weight:600;margin:0;">Email</h2>
         </div>
-        <span class="badge" style="background:oklch(92% 0.02 70);color:oklch(46% 0.02 60);">Sample</span>
+        <span class="badge" id="email-badge" style="background:oklch(92% 0.02 70);color:oklch(46% 0.02 60);">Sample</span>
       </div>
       <svg width="60" height="10" viewBox="0 0 60 10" style="margin:8px 0 10px;"><rect x="0" y="8" width="6" height="2" fill="oklch(78% 0.1 40)"/><rect x="10" y="6" width="6" height="4" fill="oklch(70% 0.12 38)"/><rect x="20" y="4" width="6" height="6" fill="oklch(62% 0.14 36)"/><rect x="30" y="2" width="6" height="8" fill="oklch(52% 0.16 35)"/></svg>
 
+      <div id="email-connect" style="margin-bottom:12px;">
+        <button id="email-connect-btn" type="button" style="font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid oklch(85% 0.02 70);background:oklch(98.5% 0.006 80);color:oklch(42% 0.15 35);cursor:pointer;">Connect Gmail</button>
+      </div>
+
+      <div id="email-rows">
       <div class="rowline" style="display:flex;justify-content:space-between;gap:10px;">
         <div style="min-width:0;">
           <div style="font-size:13px;font-weight:700;">Suzi Robertson</div>
@@ -284,6 +291,7 @@
           <span class="icobtn"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 9h10a6 6 0 0 1 6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>
           <span class="icobtn"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 9H10a6 6 0 0 0-6 6v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>
         </div>
+      </div>
       </div>
     </div>
 
@@ -506,11 +514,12 @@
     <rect width="1440" height="30" fill="url(#kw-bottom)"/>
   </svg>
 </div>
-<div style="text-align:center;font-size:11px;color:oklch(52% 0.02 60);padding:12px 40px 0;">Static preview &middot; decorative motifs inspired by koru and k&#333;whaiwhai patterning &middot; sample content throughout except Calendar (live)</div>
+<div style="text-align:center;font-size:11px;color:oklch(52% 0.02 60);padding:12px 40px 0;">Static preview &middot; decorative motifs inspired by koru and k&#333;whaiwhai patterning &middot; sample content throughout except Calendar (live) &middot; Email connects to your own Gmail once configured</div>
 
 </div>
 </div>
 
+<script async src="https://accounts.google.com/gsi/client"></script>
 <script>
   // Fill in today's date client-side so the header stays accurate after deploy.
   (function () {
@@ -530,6 +539,152 @@
       });
     });
   }
+
+  // --- Gmail: client-side OAuth, no backend ---
+  // 1. In Google Cloud Console, enable the Gmail API and create an OAuth 2.0
+  //    Client ID (Application type: Web application).
+  // 2. Add this page's exact URL (e.g. https://<you>.github.io) — and
+  //    http://localhost:8000 if you test locally — as an Authorized
+  //    JavaScript origin. No redirect URI or client secret is needed.
+  // 3. While the OAuth consent screen is in "Testing" mode, add your own
+  //    Google account under Test users, or publish the app.
+  // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
+  var GMAIL_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
+  var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+  var GMAIL_MAX_RESULTS = 5;
+
+  (function () {
+    var connectBtn = document.getElementById('email-connect-btn');
+    var connectWrap = document.getElementById('email-connect');
+    var rowsEl = document.getElementById('email-rows');
+    var badgeEl = document.getElementById('email-badge');
+    if (!connectBtn || !rowsEl || !badgeEl) return;
+
+    var configured = GMAIL_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
+    var tokenClient = null;
+
+    function setBadge(text, live) {
+      badgeEl.textContent = text;
+      badgeEl.style.background = live ? 'oklch(90% 0.06 155)' : 'oklch(92% 0.02 70)';
+      badgeEl.style.color = live ? 'oklch(30% 0.09 155)' : 'oklch(46% 0.02 60)';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function relativeTime(ms) {
+      var mins = Math.round((Date.now() - ms) / 60000);
+      if (mins < 60) return Math.max(mins, 0) + 'm ago';
+      var hours = Math.round(mins / 60);
+      if (hours < 24) return hours + 'h ago';
+      return Math.round(hours / 24) + 'd ago';
+    }
+
+    function headerValue(headers, name) {
+      for (var i = 0; i < headers.length; i++) {
+        if (headers[i].name === name) return headers[i].value;
+      }
+      return '';
+    }
+
+    function fromName(fromHeader) {
+      var match = fromHeader.match(/^"?([^"<]*)"?\s*(<.*>)?$/);
+      var name = match && match[1] ? match[1].trim() : '';
+      return name || fromHeader || 'Unknown sender';
+    }
+
+    function renderMessages(messages) {
+      if (!messages.length) {
+        rowsEl.innerHTML = '<div style="font-size:12.5px;color:oklch(46% 0.02 60);">Inbox is empty.</div>';
+        return;
+      }
+      rowsEl.innerHTML = messages.map(function (m) {
+        var headers = (m.payload && m.payload.headers) || [];
+        var subject = headerValue(headers, 'Subject') || '(no subject)';
+        var from = fromName(headerValue(headers, 'From'));
+        var when = relativeTime(Number(m.internalDate));
+        var unread = (m.labelIds || []).indexOf('UNREAD') !== -1;
+        return (
+          '<div class="rowline" style="display:flex;justify-content:space-between;gap:10px;">' +
+            '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(m.id) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
+              '<div style="font-size:13px;font-weight:' + (unread ? '700' : '500') + ';">' + escapeHtml(from) + '</div>' +
+              '<div style="font-size:12.5px;color:oklch(30% 0.02 40);margin-top:2px;">' + escapeHtml(subject) + '</div>' +
+              '<div style="font-size:11px;color:oklch(46% 0.02 60);margin-top:3px;">' + when + '</div>' +
+            '</a>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function loadInbox(accessToken) {
+      var listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX';
+      fetch(listUrl, { headers: { Authorization: 'Bearer ' + accessToken } })
+        .then(function (res) {
+          if (!res.ok) throw new Error('list failed: ' + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          var ids = (data.messages || []).map(function (m) { return m.id; });
+          if (!ids.length) { renderMessages([]); setBadge('Live', true); return; }
+          return Promise.all(ids.map(function (id) {
+            var url = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id +
+              '?format=metadata&metadataHeaders=From&metadataHeaders=Subject';
+            return fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } }).then(function (r) { return r.json(); });
+          })).then(function (msgs) {
+            renderMessages(msgs);
+            setBadge('Live', true);
+            connectWrap.style.display = 'none';
+          });
+        })
+        .catch(function (err) {
+          console.error('Gmail fetch failed:', err);
+          setBadge('Error', false);
+          sessionStorage.removeItem('gmail_token');
+          sessionStorage.removeItem('gmail_token_expiry');
+        });
+    }
+
+    function requestToken() {
+      if (!configured) {
+        alert('Add your Google OAuth Client ID to GMAIL_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
+        return;
+      }
+      if (!window.google || !google.accounts || !google.accounts.oauth2) {
+        alert('Still loading Google sign-in — try again in a moment.');
+        return;
+      }
+      if (!tokenClient) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GMAIL_CLIENT_ID,
+          scope: GMAIL_SCOPE,
+          callback: function (resp) {
+            if (resp && resp.access_token) {
+              sessionStorage.setItem('gmail_token', resp.access_token);
+              sessionStorage.setItem('gmail_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
+              loadInbox(resp.access_token);
+            } else {
+              console.error('Gmail auth failed:', resp);
+              setBadge('Not connected', false);
+            }
+          }
+        });
+      }
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    connectBtn.addEventListener('click', requestToken);
+
+    if (configured) {
+      var cachedToken = sessionStorage.getItem('gmail_token');
+      var cachedExpiry = Number(sessionStorage.getItem('gmail_token_expiry') || 0);
+      if (cachedToken && Date.now() < cachedExpiry) {
+        loadInbox(cachedToken);
+      }
+    }
+  })();
 </script>
 
 </body>
