@@ -46,8 +46,8 @@ away.
 
 ## What's live vs. sample right now
 
-The Calendar panel shows real data (from a connected Google Calendar), and
-the Email panel can connect to your real Gmail inbox (see below). Every
+The Email panel can connect to your real Gmail inbox, and the Calendar
+panel can connect to your real Google Calendar (see below for both). Every
 other panel — news, sports, real estate, product research, widgets — is
 realistic sample content, laid out exactly where live data would go once
 those sources are wired up. That's the next phase of work, and it needs a
@@ -56,14 +56,17 @@ want settings or added widgets to follow you across devices — a place to
 store your account's preferences). This static site is the front end that
 phase will plug into.
 
-## Connecting Gmail
+## Connecting Gmail and Google Calendar
 
-The Email panel talks to Gmail directly from the browser — no backend
-required — using Google's OAuth sign-in. One-time setup, all in [Google
-Cloud Console](https://console.cloud.google.com/):
+Both panels talk to Google directly from the browser — no backend required
+— using Google's OAuth sign-in. They share one Client ID but sign in
+separately (Connect Gmail and Connect Calendar are independent buttons, so
+connecting one doesn't hand the other panel access). One-time setup, all in
+[Google Cloud Console](https://console.cloud.google.com/):
 
 1. Create a project (or pick an existing one).
-2. **APIs & Services → Library** — search for "Gmail API" and enable it.
+2. **APIs & Services → Library** — search for and enable both the **Gmail
+   API** and the **Google Calendar API**.
 3. **APIs & Services → OAuth consent screen** — set it up as **External**,
    fill in the required fields. While it's in "Testing" status, add your
    own Gmail address under **Test users** (only test users can sign in
@@ -73,24 +76,31 @@ Cloud Console](https://console.cloud.google.com/):
    JavaScript origins**, add your GitHub Pages URL exactly, e.g.
    `https://<your-username>.github.io` (no trailing slash, no path). Add
    `http://localhost:8000` too if you want to test locally by running
-   `python -m http.server` in this folder.
+   `python -m http.server` in this folder. Leave Authorized redirect URIs
+   empty — this flow doesn't use one.
 5. Copy the generated Client ID (ends in `.apps.googleusercontent.com`).
-6. Open `index.html`, find `GMAIL_CLIENT_ID` near the bottom (search for
-   `REPLACE_WITH_YOUR_CLIENT_ID`), and paste your Client ID in.
-7. Deploy the change. On the live page, click **Connect Gmail** in the
-   Email card and sign in — it'll show your 5 most recent inbox messages
-   with a "Live" badge, reply/forward icons for handling mail without
-   leaving the dashboard, and a circle icon to toggle read/unread.
+6. Open `index.html`, find `GOOGLE_CLIENT_ID` near the bottom (search for
+   `REPLACE_WITH_YOUR_CLIENT_ID`), and paste your Client ID in — it covers
+   both panels.
+7. Deploy the change. On the live page:
+   - Click **Connect Gmail** in the Email card — shows your 5 most recent
+     inbox messages with a "Live" badge, reply/forward icons, and a circle
+     icon to toggle read/unread.
+   - Click **Connect Calendar** in the Calendar card — shows your next 5
+     upcoming events. Type into "Quick add an event…" (e.g. "Dinner with
+     Sarah tomorrow 7pm") and hit the + button or Enter — Google parses the
+     text into a real event on your calendar and the list refreshes.
 
 The Client ID isn't a secret (it's fine to be in the page source — Google
 doesn't accept requests from it unless they come from an authorized
-origin). No client secret or refresh token is ever used or stored; the
-access token lives only in that browser tab's `sessionStorage` and expires
-after about an hour, after which clicking Connect Gmail again re-authorizes
-it.
+origin). No client secret or refresh token is ever used or stored; each
+panel's access token lives only in that browser tab's `sessionStorage` and
+expires after about an hour, after which clicking that panel's Connect
+button again re-authorizes it.
 
-Sign-in requests `gmail.modify` (to show the inbox and toggle read/unread)
-and `gmail.send` (to reply/forward) together. Each time a new capability
-like this is added, the scope list changes, and any previously cached
-session only has the old scopes — click **Connect Gmail** again once to
-re-consent to the current set.
+Gmail sign-in requests `gmail.modify` (to show the inbox and toggle
+read/unread) and `gmail.send` (to reply/forward) together. Calendar
+sign-in requests `calendar.events` (to show upcoming events and create new
+ones). Each time a new capability is added, the relevant scope list
+changes, and any previously cached session only has the old scopes — click
+that panel's Connect button again once to re-consent to the current set.

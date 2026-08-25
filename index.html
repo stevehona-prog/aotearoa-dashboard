@@ -302,10 +302,15 @@
           <svg width="20" height="20" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><rect x="3" y="5" width="18" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
           <h2 style="font-family:'Spectral',Georgia,serif;font-size:17px;font-weight:600;margin:0;">Calendar</h2>
         </div>
-        <span class="badge" style="background:oklch(90% 0.06 155);color:oklch(30% 0.09 155);">Live</span>
+        <span class="badge" id="calendar-badge" style="background:oklch(92% 0.02 70);color:oklch(46% 0.02 60);">Sample</span>
       </div>
       <svg width="60" height="10" viewBox="0 0 60 10" style="margin:8px 0 10px;"><rect x="0" y="8" width="6" height="2" fill="oklch(78% 0.1 40)"/><rect x="10" y="6" width="6" height="4" fill="oklch(70% 0.12 38)"/><rect x="20" y="4" width="6" height="6" fill="oklch(62% 0.14 36)"/><rect x="30" y="2" width="6" height="8" fill="oklch(52% 0.16 35)"/></svg>
 
+      <div id="calendar-connect" style="margin-bottom:12px;">
+        <button id="calendar-connect-btn" type="button" style="font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid oklch(85% 0.02 70);background:oklch(98.5% 0.006 80);color:oklch(42% 0.15 35);cursor:pointer;">Connect Calendar</button>
+      </div>
+
+      <div id="calendar-rows">
       <div class="rowline" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div><div style="font-size:13px;font-weight:700;">Suzi and Steve in Perth</div><div style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">Sun 6 &ndash; Sun 20 Sep</div></div>
         <span class="icobtn"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
@@ -326,11 +331,13 @@
         <div><div style="font-size:13px;font-weight:700;">Suzi's Birthday</div><div style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">Tue 17 Nov</div></div>
         <span class="icobtn"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
       </div>
+      </div>
 
       <div style="display:flex;gap:8px;margin-top:14px;">
-        <div style="flex:1;border:1px solid oklch(85% 0.02 70);border-radius:8px;padding:8px 12px;font-size:12px;color:oklch(46% 0.02 60);">Quick add an event&hellip;</div>
-        <span class="icobtn" style="width:32px;height:32px;background:oklch(46% 0.09 155);color:oklch(98% 0.01 80);border-color:oklch(46% 0.09 155);"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <input type="text" id="calendar-quickadd-input" placeholder="Quick add an event…" style="flex:1;border:1px solid oklch(85% 0.02 70);border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;color:oklch(22% 0.02 40);box-sizing:border-box;">
+        <span class="icobtn" id="calendar-quickadd-btn" style="width:32px;height:32px;background:oklch(46% 0.09 155);color:oklch(98% 0.01 80);border-color:oklch(46% 0.09 155);cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
       </div>
+      <div id="calendar-quickadd-status" style="font-size:11px;color:oklch(46% 0.02 60);margin-top:4px;min-height:14px;"></div>
     </div>
 
   </div>
@@ -514,7 +521,7 @@
     <rect width="1440" height="30" fill="url(#kw-bottom)"/>
   </svg>
 </div>
-<div style="text-align:center;font-size:11px;color:oklch(52% 0.02 60);padding:12px 40px 0;">Static preview &middot; decorative motifs inspired by koru and k&#333;whaiwhai patterning &middot; sample content throughout except Calendar (live) &middot; Email connects to your own Gmail once configured</div>
+<div style="text-align:center;font-size:11px;color:oklch(52% 0.02 60);padding:12px 40px 0;">Static preview &middot; decorative motifs inspired by koru and k&#333;whaiwhai patterning &middot; sample content throughout &middot; Email and Calendar connect to your own Google account once configured</div>
 
 </div>
 </div>
@@ -540,16 +547,18 @@
     });
   }
 
-  // --- Gmail: client-side OAuth, no backend ---
-  // 1. In Google Cloud Console, enable the Gmail API and create an OAuth 2.0
-  //    Client ID (Application type: Web application).
+  // --- Google sign-in: client-side OAuth, no backend, shared by Gmail and ---
+  // --- Calendar below. ---
+  // 1. In Google Cloud Console, enable the Gmail API and the Google Calendar
+  //    API, and create one OAuth 2.0 Client ID (Application type: Web
+  //    application) — the same client can request tokens for both APIs.
   // 2. Add this page's exact URL (e.g. https://<you>.github.io) — and
   //    http://localhost:8000 if you test locally — as an Authorized
   //    JavaScript origin. No redirect URI or client secret is needed.
   // 3. While the OAuth consent screen is in "Testing" mode, add your own
   //    Google account under Test users, or publish the app.
   // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
-  var GMAIL_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
+  var GOOGLE_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
   var GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send';
   var GMAIL_MAX_RESULTS = 5;
 
@@ -560,7 +569,7 @@
     var badgeEl = document.getElementById('email-badge');
     if (!connectBtn || !rowsEl || !badgeEl) return;
 
-    var configured = GMAIL_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
+    var configured = GOOGLE_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
     var tokenClient = null;
     var currentToken = null;
     var messageStubs = {};  // id -> { id, threadId } from the inbox list
@@ -863,7 +872,7 @@
 
     function requestToken() {
       if (!configured) {
-        alert('Add your Google OAuth Client ID to GMAIL_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
+        alert('Add your Google OAuth Client ID to GOOGLE_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
         return;
       }
       if (!window.google || !google.accounts || !google.accounts.oauth2) {
@@ -872,7 +881,7 @@
       }
       if (!tokenClient) {
         tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: GMAIL_CLIENT_ID,
+          client_id: GOOGLE_CLIENT_ID,
           scope: GMAIL_SCOPE,
           callback: function (resp) {
             if (resp && resp.access_token) {
@@ -903,6 +912,186 @@
       var cachedScope = sessionStorage.getItem('gmail_token_scope') || '';
       if (cachedToken && Date.now() < cachedExpiry && hasRequiredScope(cachedScope)) {
         loadInbox(cachedToken);
+      }
+    }
+  })();
+
+  // --- Google Calendar: same client-side OAuth pattern as Gmail above,
+  // but its own sign-in (separate scope, separate cached session) so
+  // connecting one doesn't silently grant access to the other. ---
+  var CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+  var CALENDAR_MAX_RESULTS = 5;
+
+  (function () {
+    var connectBtn = document.getElementById('calendar-connect-btn');
+    var connectWrap = document.getElementById('calendar-connect');
+    var rowsEl = document.getElementById('calendar-rows');
+    var badgeEl = document.getElementById('calendar-badge');
+    var quickInput = document.getElementById('calendar-quickadd-input');
+    var quickBtn = document.getElementById('calendar-quickadd-btn');
+    var quickStatus = document.getElementById('calendar-quickadd-status');
+    if (!connectBtn || !rowsEl || !badgeEl) return;
+
+    var configured = GOOGLE_CLIENT_ID.indexOf('REPLACE_WITH') !== 0;
+    var tokenClient = null;
+    var currentToken = null;
+
+    function setBadge(text, live) {
+      badgeEl.textContent = text;
+      badgeEl.style.background = live ? 'oklch(90% 0.06 155)' : 'oklch(92% 0.02 70)';
+      badgeEl.style.color = live ? 'oklch(30% 0.09 155)' : 'oklch(46% 0.02 60)';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function calendarFetch(path, opts) {
+      opts = opts || {};
+      var headers = { Authorization: 'Bearer ' + currentToken };
+      for (var k in opts.headers) headers[k] = opts.headers[k];
+      opts.headers = headers;
+      return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/' + path, opts).then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error('Calendar API ' + res.status + ': ' + t); });
+        return res.json();
+      });
+    }
+
+    function parseDateOnly(s) {
+      var parts = s.split('-');
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    }
+
+    function sameDay(a, b) {
+      return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    }
+
+    function formatDay(d) {
+      return d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+
+    function formatTime(d) {
+      return d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' }).replace(/\s+/g, '').toLowerCase();
+    }
+
+    function formatEventWhen(ev) {
+      if (ev.start.date) {
+        var startD = parseDateOnly(ev.start.date);
+        var endD = parseDateOnly(ev.end.date);
+        endD.setDate(endD.getDate() - 1); // Calendar's all-day end date is exclusive
+        return sameDay(startD, endD) ? formatDay(startD) : formatDay(startD) + ' – ' + formatDay(endD);
+      }
+      var start = new Date(ev.start.dateTime);
+      var end = new Date(ev.end.dateTime);
+      return formatDay(start) + ' · ' + formatTime(start) + '–' + formatTime(end);
+    }
+
+    function renderEvents(events) {
+      if (!events.length) {
+        rowsEl.innerHTML = '<div style="font-size:12.5px;color:oklch(46% 0.02 60);">No upcoming events.</div>';
+        return;
+      }
+      rowsEl.innerHTML = events.map(function (ev) {
+        var title = ev.summary || '(no title)';
+        var when = formatEventWhen(ev);
+        var link = ev.htmlLink || 'https://calendar.google.com/';
+        return (
+          '<div class="rowline" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+            '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
+              '<div style="font-size:13px;font-weight:700;">' + escapeHtml(title) + '</div>' +
+              '<div style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">' + escapeHtml(when) + '</div>' +
+            '</a>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function loadEvents(accessToken) {
+      currentToken = accessToken;
+      var url = 'events?maxResults=' + CALENDAR_MAX_RESULTS +
+        '&singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(new Date().toISOString());
+      calendarFetch(url)
+        .then(function (data) {
+          renderEvents(data.items || []);
+          setBadge('Live', true);
+          connectWrap.style.display = 'none';
+        })
+        .catch(function (err) {
+          console.error('Calendar fetch failed:', err);
+          setBadge('Error', false);
+          sessionStorage.removeItem('calendar_token');
+          sessionStorage.removeItem('calendar_token_expiry');
+          sessionStorage.removeItem('calendar_token_scope');
+        });
+    }
+
+    function quickAdd() {
+      var text = quickInput.value.trim();
+      if (!text) return;
+      if (!currentToken) {
+        alert('Click Connect Calendar first.');
+        return;
+      }
+      quickBtn.style.opacity = '0.5';
+      quickStatus.textContent = 'Adding…';
+      calendarFetch('events/quickAdd?text=' + encodeURIComponent(text), { method: 'POST' })
+        .then(function () {
+          quickInput.value = '';
+          quickStatus.textContent = 'Added.';
+          setTimeout(function () { quickStatus.textContent = ''; }, 2000);
+          loadEvents(currentToken);
+        })
+        .catch(function (err) {
+          console.error('Calendar quick add failed:', err);
+          quickStatus.textContent = 'Failed to add — see console.';
+        })
+        .then(function () { quickBtn.style.opacity = ''; });
+    }
+
+    quickBtn.addEventListener('click', quickAdd);
+    quickInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); quickAdd(); }
+    });
+
+    function requestToken() {
+      if (!configured) {
+        alert('Add your Google OAuth Client ID to GOOGLE_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
+        return;
+      }
+      if (!window.google || !google.accounts || !google.accounts.oauth2) {
+        alert('Still loading Google sign-in — try again in a moment.');
+        return;
+      }
+      if (!tokenClient) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: CALENDAR_SCOPE,
+          callback: function (resp) {
+            if (resp && resp.access_token) {
+              sessionStorage.setItem('calendar_token', resp.access_token);
+              sessionStorage.setItem('calendar_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
+              sessionStorage.setItem('calendar_token_scope', resp.scope || '');
+              loadEvents(resp.access_token);
+            } else {
+              console.error('Calendar auth failed:', resp);
+              setBadge('Not connected', false);
+            }
+          }
+        });
+      }
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    connectBtn.addEventListener('click', requestToken);
+
+    if (configured) {
+      var cachedToken = sessionStorage.getItem('calendar_token');
+      var cachedExpiry = Number(sessionStorage.getItem('calendar_token_expiry') || 0);
+      var cachedScope = sessionStorage.getItem('calendar_token_scope') || '';
+      if (cachedToken && Date.now() < cachedExpiry && cachedScope.indexOf('calendar.events') !== -1) {
+        loadEvents(cachedToken);
       }
     }
   })();
