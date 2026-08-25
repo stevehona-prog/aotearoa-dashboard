@@ -28,6 +28,13 @@ dependencies — GitHub Pages just needs to serve these files as-is.
 3. You'll get an app icon using the koru mark, and it opens full-screen with
    no browser address bar.
 
+Once installed, dragging down from the top refreshes the page and re-pulls
+live Email/Calendar data, same as pull-to-refresh in a regular Safari tab —
+iOS doesn't provide that gesture natively for installed home-screen apps,
+so it's implemented by hand in `index.html` and only activates when running
+standalone (installed), so it never doubles up with Safari's own gesture in
+a normal browser tab.
+
 ## Making changes later
 
 Come back to me with what you'd like changed, and I'll edit the files and
