@@ -26,6 +26,7 @@
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; }
+  html { scroll-behavior: smooth; }
   a { color: oklch(42% 0.15 35); text-decoration: none; }
   a:hover { color: oklch(32% 0.15 35); text-decoration: underline; }
   .card { background: oklch(98.5% 0.006 80); border: 1px solid oklch(88% 0.02 70); border-radius: 10px; padding: 20px 22px; }
@@ -109,17 +110,17 @@
       <div style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">Black Ferns Sevens 2nd, Cape Town</div>
     </div>
 
-    <div class="card" style="padding:14px 16px;">
+    <a href="#email-panel" class="card" style="padding:14px 16px;display:block;text-decoration:none;color:inherit;">
       <svg width="18" height="18" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
       <div style="font-size:12px;font-weight:600;margin-top:8px;">Email</div>
-      <div style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">2 need a reply, 1 renewal due</div>
-    </div>
+      <div id="highlight-email-sub" style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">2 need a reply, 1 renewal due</div>
+    </a>
 
-    <div class="card" style="padding:14px 16px;">
+    <a href="#calendar-panel" class="card" style="padding:14px 16px;display:block;text-decoration:none;color:inherit;">
       <svg width="18" height="18" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><rect x="3" y="5" width="18" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
       <div style="font-size:12px;font-weight:600;margin-top:8px;">Calendar</div>
-      <div style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">Perth trip from 6 Sep</div>
-    </div>
+      <div id="highlight-calendar-sub" style="font-size:11.5px;color:oklch(46% 0.02 60);margin-top:2px;">Perth trip from 6 Sep</div>
+    </a>
 
     <div class="card" style="padding:14px 16px;">
       <svg width="18" height="18" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><path d="M4 11 12 4l8 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M6 10v9h12v-9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -230,7 +231,7 @@
   <div style="display:flex;flex-direction:column;gap:22px;min-width:0;">
 
     <!-- EMAIL -->
-    <div class="card">
+    <div class="card" id="email-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:10px;">
           <svg width="20" height="20" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -296,7 +297,7 @@
     </div>
 
     <!-- CALENDAR -->
-    <div class="card">
+    <div class="card" id="calendar-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:10px;">
           <svg width="20" height="20" viewBox="0 0 24 24" style="color:oklch(52% 0.16 35);"><rect x="3" y="5" width="18" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -934,6 +935,21 @@
       openCompose(action, row, stub);
     });
 
+    function updateHighlight() {
+      var subEl = document.getElementById('highlight-email-sub');
+      if (!subEl) return;
+      Promise.all([
+        gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:unread newer_than:1d')),
+        gmailFetch('messages?maxResults=1&q=' + encodeURIComponent('in:inbox is:read subject:(renewal OR renewing OR subscription OR license OR licence)'))
+      ]).then(function (results) {
+        var unread24h = results[0].resultSizeEstimate || 0;
+        var renewalsRead = results[1].resultSizeEstimate || 0;
+        subEl.textContent = unread24h + ' unread in last 24h, ' + renewalsRead + ' renewal' + (renewalsRead === 1 ? '' : 's') + ' read';
+      }).catch(function (err) {
+        console.error('Email highlight fetch failed:', err);
+      });
+    }
+
     function loadInbox(accessToken) {
       currentToken = accessToken;
       warmContactsCache();
@@ -949,6 +965,7 @@
             connectWrap.style.display = 'none';
           });
         })
+        .then(function () { updateHighlight(); })
         .catch(function (err) {
           console.error('Gmail fetch failed:', err);
           setBadge('Error', false);
@@ -1096,13 +1113,26 @@
       }).join('');
     }
 
+    function updateHighlight(events) {
+      var subEl = document.getElementById('highlight-calendar-sub');
+      if (!subEl) return;
+      if (!events.length) {
+        subEl.textContent = 'No upcoming events';
+        return;
+      }
+      var next = events[0];
+      subEl.textContent = (next.summary || '(no title)') + ' · ' + formatEventWhen(next);
+    }
+
     function loadEvents(accessToken) {
       currentToken = accessToken;
       var url = 'events?maxResults=' + CALENDAR_MAX_RESULTS +
         '&singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(new Date().toISOString());
       calendarFetch(url)
         .then(function (data) {
-          renderEvents(data.items || []);
+          var events = data.items || [];
+          renderEvents(events);
+          updateHighlight(events);
           setBadge('Live', true);
           connectWrap.style.display = 'none';
         })

@@ -91,6 +91,12 @@ connecting one doesn't hand the other panel access). One-time setup, all in
      upcoming events. Type into "Quick add an event…" (e.g. "Dinner with
      Sarah tomorrow 7pm") and hit the + button or Enter — Google parses the
      text into a real event on your calendar and the list refreshes.
+   - Once connected, the Email and Calendar tiles up in **Today's
+     Highlights** update too — Email shows unread count in the last 24h
+     and how many read messages look like renewals (subject contains
+     "renewal", "subscription", "license"/"licence", etc.), Calendar shows
+     your next upcoming event. Both tiles are clickable and jump straight
+     down to their panel.
 
 The Client ID isn't a secret (it's fine to be in the page source — Google
 doesn't accept requests from it unless they come from an authorized
