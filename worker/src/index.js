@@ -47,12 +47,12 @@ async function sha256Hex(input) {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function timingSafeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+// Each device gets its own dashboard_token, stored as a distinct KV key
+// (dashboard_token:<hash-of-the-token>) rather than a single shared slot —
+// otherwise connecting on a second device silently invalidates the first's
+// cached credential. All devices still share the one Google refresh token
+// below, since they're all acting as the same Google account.
+const DASHBOARD_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function redirectUriFor(requestUrl) {
   return new URL('/auth/callback', requestUrl).toString();
@@ -134,7 +134,8 @@ async function handleAuthCallback(request, env) {
   }
 
   const dashboardToken = randomToken(32);
-  await env.AUTH_KV.put('dashboard_token_hash', await sha256Hex(dashboardToken));
+  const dashboardTokenHash = await sha256Hex(dashboardToken);
+  await env.AUTH_KV.put(`dashboard_token:${dashboardTokenHash}`, '1', { expirationTtl: DASHBOARD_TOKEN_TTL_SECONDS });
 
   const fragment = new URLSearchParams({
     dtoken: dashboardToken,
@@ -159,11 +160,14 @@ async function handleToken(request, env) {
     return new Response(JSON.stringify({ error: 'missing_token' }), { status: 401, headers });
   }
 
-  const storedHash = await env.AUTH_KV.get('dashboard_token_hash');
   const presentedHash = await sha256Hex(presented);
-  if (!storedHash || !timingSafeEqual(presentedHash, storedHash)) {
+  const known = await env.AUTH_KV.get(`dashboard_token:${presentedHash}`);
+  if (!known) {
     return new Response(JSON.stringify({ error: 'invalid_token' }), { status: 401, headers });
   }
+  // Sliding expiry: touching a device's token on every successful use keeps
+  // it alive past the 30-day TTL as long as it's actually being used.
+  await env.AUTH_KV.put(`dashboard_token:${presentedHash}`, '1', { expirationTtl: DASHBOARD_TOKEN_TTL_SECONDS });
 
   const refreshToken = await env.AUTH_KV.get('google_refresh_token');
   if (!refreshToken) {
