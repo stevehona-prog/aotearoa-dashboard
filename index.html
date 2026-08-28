@@ -602,18 +602,14 @@
     });
   })();
 
-  // --- Google sign-in: client-side OAuth, no backend. One shared consent
-  // covers Gmail, Contacts and Calendar below — sign in once via either
-  // panel's Connect button and both panels populate. ---
-  // 1. In Google Cloud Console, enable the Gmail API, the Google Calendar
-  //    API, and the People API, and create one OAuth 2.0 Client ID
-  //    (Application type: Web application).
-  // 2. Add this page's exact URL (e.g. https://<you>.github.io) — and
-  //    http://localhost:8000 if you test locally — as an Authorized
-  //    JavaScript origin. No redirect URI or client secret is needed.
-  // 3. While the OAuth consent screen is in "Testing" mode, add your own
-  //    Google account under Test users, or publish the app.
-  // 4. Paste the Client ID below. Full walkthrough in DEPLOY.md.
+  // --- Google sign-in: one shared consent covers Gmail, Contacts and
+  // Calendar below — sign in once via either panel's Connect button and
+  // both panels populate. Backed by a small Cloudflare Worker
+  // (see worker/) that holds a real refresh token server-side, so once
+  // connected the dashboard renews silently instead of reauthenticating
+  // every ~hour — down to roughly weekly, matching the Google Testing-mode
+  // grant ceiling. Full walkthrough, including the Worker setup, is in
+  // DEPLOY.md.
   var GOOGLE_CLIENT_ID = '294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com';
   var GOOGLE_SCOPE = [
     'https://www.googleapis.com/auth/gmail.modify',
@@ -621,6 +617,9 @@
     'https://www.googleapis.com/auth/contacts.readonly',
     'https://www.googleapis.com/auth/calendar.events'
   ].join(' ');
+  // Leave blank ('') to fall back to the old popup-only flow (no silent
+  // renewal, reauth every ~hour) if the Worker is ever unavailable.
+  var WORKER_BASE_URL = 'https://aotearoa-dashboard-auth.stevehona.workers.dev';
   var GMAIL_MAX_RESULTS = 5;
 
   var GoogleAuth = (function () {
@@ -634,20 +633,64 @@
       return GOOGLE_SCOPE.split(' ').every(function (s) { return granted.indexOf(s) !== -1; });
     }
 
-    if (configured) {
+    function notify(t) {
+      listeners.forEach(function (fn) { fn(t); });
+    }
+
+    function cacheToken(accessToken, expiresIn, scope) {
+      token = accessToken;
+      sessionStorage.setItem('google_token', accessToken);
+      sessionStorage.setItem('google_token_expiry', String(Date.now() + (Number(expiresIn) || 3600) * 1000));
+      sessionStorage.setItem('google_token_scope', scope || '');
+    }
+
+    // Landing back from the Worker's /auth/callback? It hands the fresh
+    // access token straight back in the URL fragment (never sent to any
+    // server) so this first token is usable immediately, no extra round
+    // trip needed.
+    (function consumeWorkerRedirect() {
+      if (location.hash.indexOf('dtoken=') === -1) return;
+      var params = new URLSearchParams(location.hash.slice(1));
+      var dtoken = params.get('dtoken');
+      if (dtoken) localStorage.setItem('google_worker_token', dtoken);
+      var accessToken = params.get('access_token');
+      if (accessToken) cacheToken(accessToken, params.get('expires_in'), params.get('scope'));
+      history.replaceState(null, '', location.pathname + location.search);
+    })();
+
+    // No valid cached session token, but this browser was linked to the
+    // Worker before — try a silent renewal. No popup, no visible UI
+    // unless it fails, in which case we just fall back to showing Connect.
+    function trySilentWorkerRenewal() {
+      var dtoken = localStorage.getItem('google_worker_token');
+      if (!dtoken) return;
+      fetch(WORKER_BASE_URL + '/token', { headers: { Authorization: 'Bearer ' + dtoken } })
+        .then(function (res) {
+          if (!res.ok) throw new Error('worker token refresh failed: ' + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          cacheToken(data.access_token, data.expires_in, data.scope);
+          notify(token);
+        })
+        .catch(function (err) {
+          console.warn('Silent Google renewal failed, will need Connect:', err);
+          localStorage.removeItem('google_worker_token');
+        });
+    }
+
+    if (configured && !token) {
       var cachedToken = sessionStorage.getItem('google_token');
       var cachedExpiry = Number(sessionStorage.getItem('google_token_expiry') || 0);
       var cachedScope = sessionStorage.getItem('google_token_scope') || '';
       if (cachedToken && Date.now() < cachedExpiry && hasRequiredScope(cachedScope)) {
         token = cachedToken;
+      } else if (WORKER_BASE_URL) {
+        trySilentWorkerRenewal();
       }
     }
 
-    function notify(t) {
-      listeners.forEach(function (fn) { fn(t); });
-    }
-
-    function requestToken() {
+    function requestTokenImplicit() {
       if (!configured) {
         alert('Add your Google OAuth Client ID to GOOGLE_CLIENT_ID in index.html first — see the setup steps in DEPLOY.md.');
         return;
@@ -662,10 +705,7 @@
           scope: GOOGLE_SCOPE,
           callback: function (resp) {
             if (resp && resp.access_token) {
-              token = resp.access_token;
-              sessionStorage.setItem('google_token', token);
-              sessionStorage.setItem('google_token_expiry', String(Date.now() + (Number(resp.expires_in) || 3600) * 1000));
-              sessionStorage.setItem('google_token_scope', resp.scope || '');
+              cacheToken(resp.access_token, resp.expires_in, resp.scope);
               notify(token);
             } else {
               console.error('Google auth failed:', resp);
@@ -675,6 +715,14 @@
         });
       }
       tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    function requestToken() {
+      if (WORKER_BASE_URL) {
+        location.href = WORKER_BASE_URL + '/auth/start';
+        return;
+      }
+      requestTokenImplicit();
     }
 
     return {

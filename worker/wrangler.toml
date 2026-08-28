@@ -1,0 +1,11 @@
+name = "aotearoa-dashboard-auth"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+kv_namespaces = [
+  { binding = "AUTH_KV", id = "09ab13e9b6fa4a2881f88b9580874ac3" }
+]
+
+[vars]
+GOOGLE_CLIENT_ID = "294862769624-d8es2u7go6bi4ic1nv763e5qdrmv95jf.apps.googleusercontent.com"
+FRONTEND_URL = "https://stevehona-prog.github.io/aotearoa-dashboard"

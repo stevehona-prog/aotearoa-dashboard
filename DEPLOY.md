@@ -2,7 +2,10 @@
 
 This folder is a complete, ready-to-host static site: `index.html`, the PWA
 manifest, a service worker, and the app icons. No build step, no
-dependencies — GitHub Pages just needs to serve these files as-is.
+dependencies — GitHub Pages just needs to serve these files as-is. (The
+`worker/` folder is a separate piece — a small Cloudflare Worker backend,
+covered near the end of this doc — with its own `npm install`; it doesn't
+affect how the static site itself deploys.)
 
 ## Colour scheme
 
@@ -98,8 +101,10 @@ One-time setup, all in [Google Cloud Console](https://console.cloud.google.com/)
    JavaScript origins**, add your GitHub Pages URL exactly, e.g.
    `https://<your-username>.github.io` (no trailing slash, no path). Add
    `http://localhost:8000` too if you want to test locally by running
-   `python -m http.server` in this folder. Leave Authorized redirect URIs
-   empty — this flow doesn't use one.
+   `python -m http.server` in this folder. Under **Authorized redirect
+   URIs**, add `https://<your-worker-subdomain>.workers.dev/auth/callback`
+   — this is used by the Cloudflare Worker described below, for silent
+   renewal; the in-browser flow itself still doesn't use a redirect URI.
 5. Copy the generated Client ID (ends in `.apps.googleusercontent.com`).
 6. Open `index.html`, find `GOOGLE_CLIENT_ID` near the bottom (search for
    `REPLACE_WITH_YOUR_CLIENT_ID`), and paste your Client ID in — it covers
@@ -121,10 +126,10 @@ One-time setup, all in [Google Cloud Console](https://console.cloud.google.com/)
 
 The Client ID isn't a secret (it's fine to be in the page source — Google
 doesn't accept requests from it unless they come from an authorized
-origin). No client secret or refresh token is ever used or stored; the
-single shared access token lives only in that browser tab's
-`sessionStorage` and expires after about an hour, after which clicking
-either panel's Connect button again re-authorizes both.
+origin). The access token itself lives only in that browser tab's
+`sessionStorage` and expires after about an hour — on its own, that would
+mean reauthenticating constantly. The Cloudflare Worker below is what
+turns that into roughly a weekly prompt instead.
 
 The one sign-in requests every scope both panels need together:
 `gmail.modify` (inbox + toggle read/unread), `gmail.send`
@@ -140,3 +145,70 @@ Contact search in the Forward "To" field starts suggesting matches after
 saved). It can take a few seconds after first connecting for Google's
 contacts search index to warm up; if suggestions don't appear immediately
 after a fresh Connect Gmail, try again a moment later.
+
+## Silent renewal via a Cloudflare Worker
+
+Google only issues a long-lived **refresh token** to a "confidential"
+client — one that can keep a secret safe on a server. The browser-only
+flow above can never get one, so left on its own it needs a full popup
+reauth every ~hour. A small Cloudflare Worker closes that gap: it holds a
+real refresh token server-side and lets the dashboard silently mint fresh
+access tokens on request, no popup, until the refresh token itself expires
+— which for a Google app in **Testing** status (this one, deliberately —
+see below) is capped at about 7 days. So instead of hourly, reauth becomes
+roughly a once-a-week, one-click affair.
+
+**Why stay in Testing status instead of publishing/verifying the app**:
+the Gmail scopes used here (`gmail.modify`, `gmail.send`) are classified
+as *restricted*, and moving to Production requires Google's formal
+verification plus a CASA security assessment — a process built for apps
+with real external user bases, not a personal single-user dashboard. This
+dashboard is already effectively private at the Google layer regardless of
+GitHub Pages being public: only the Test users you've explicitly added
+(just yourself) can ever complete the consent screen.
+
+This repo's Worker is already deployed at
+`https://aotearoa-dashboard-auth.stevehona.workers.dev`. To set one up
+from scratch (e.g. if you fork this or need to redeploy):
+
+1. `cd worker`, then `npm install` (installs `wrangler`, Cloudflare's CLI,
+   as a local dev dependency — no global install needed).
+2. `npx wrangler login` — opens a browser to authenticate with your
+   Cloudflare account (free tier is more than enough for this).
+3. `npx wrangler kv namespace create AUTH_KV` — creates the KV store that
+   holds the refresh token. Paste the returned `id` into `wrangler.toml`'s
+   `kv_namespaces` entry.
+4. First time only: if your Cloudflare account has no `workers.dev`
+   subdomain yet, `wrangler deploy` will tell you to register one first
+   (Cloudflare dashboard → Workers & Pages → Create application — any
+   starter Worker triggers the one-time subdomain picker; you can delete
+   that placeholder afterward).
+5. `npx wrangler deploy` from `worker/` — note the resulting
+   `*.workers.dev` URL.
+6. In Google Cloud Console, on the same OAuth client used above, add
+   `<that-url>/auth/callback` as an Authorized redirect URI (see step 4 in
+   the section above), and copy the Client Secret from the same page —
+   every "Web application" type client gets one automatically, even though
+   the plain browser flow above never uses it.
+7. `npx wrangler secret put GOOGLE_CLIENT_SECRET` from `worker/` — pastes
+   the secret in encrypted, never touches `wrangler.toml` or git.
+8. In `index.html`, set `WORKER_BASE_URL` (next to `GOOGLE_CLIENT_ID`) to
+   your Worker's URL. Leaving it blank falls back to the old popup-only
+   flow with no silent renewal — a safety net if the Worker is ever down.
+
+Once connected, the flow is: clicking Connect redirects through
+`/auth/start` → Google's consent screen → the Worker's `/auth/callback`,
+which hands the dashboard a fresh access token directly in the redirect
+(and stores a long-lived credential for this browser in `localStorage`).
+On later visits, if the cached hourly token has expired, the dashboard
+silently calls the Worker's `/token` endpoint before ever showing a
+Connect button — most of the time, panels just populate with no prompt at
+all. Only once the underlying refresh token itself expires (~weekly) does
+it fall back to one visible Connect click.
+
+The Worker's `/token` endpoint never exposes the refresh token itself, and
+is protected by a separate bearer credential unique to this browser (not
+your Google credentials) — even someone who found the Worker's URL
+couldn't use it to access your Gmail without also having that credential,
+and `/auth/start` itself is gated by Google's own Test-user list the same
+way the in-browser flow already is.
