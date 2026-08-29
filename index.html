@@ -375,6 +375,25 @@
         <span class="icobtn" id="calendar-quickadd-btn" style="width:32px;height:32px;background:oklch(58% 0.13 155);color:oklch(12% 0.03 155);border-color:oklch(58% 0.13 155);cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
       </div>
       <div id="calendar-quickadd-status" style="font-size:11px;color:oklch(68% 0.025 145);margin-top:4px;min-height:14px;"></div>
+
+      <a href="#" id="calendar-details-toggle" style="display:inline-block;font-size:11.5px;font-weight:600;margin-top:8px;">+ Add date, time &amp; invite</a>
+      <div id="calendar-details-form" style="display:none;margin-top:10px;padding:10px;border:1px solid oklch(32% 0.045 155);border-radius:8px;background:oklch(23% 0.04 155);">
+        <input type="text" id="calendar-detail-title" placeholder="Event title" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;margin-bottom:6px;">
+        <input type="date" id="calendar-detail-date" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;margin-bottom:6px;">
+        <div style="display:flex;gap:8px;margin-bottom:6px;">
+          <input type="time" id="calendar-detail-start" style="flex:1;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">
+          <input type="time" id="calendar-detail-end" style="flex:1;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">
+        </div>
+        <div style="position:relative;margin-bottom:6px;">
+          <input type="text" id="calendar-detail-attendee" placeholder="Invite (optional)" autocomplete="off" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">
+          <div id="calendar-detail-attendee-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:5;background:oklch(23% 0.04 155);border:1px solid oklch(29% 0.04 155);border-radius:6px;margin-top:2px;max-height:160px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1);"></div>
+        </div>
+        <div id="calendar-detail-status" style="font-size:11px;color:oklch(68% 0.025 145);margin-top:2px;min-height:14px;"></div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button type="button" id="calendar-detail-create" style="font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid oklch(58% 0.13 155);background:oklch(58% 0.13 155);color:oklch(12% 0.03 155);cursor:pointer;">Create</button>
+          <button type="button" id="calendar-detail-cancel" style="font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid oklch(29% 0.04 155);background:oklch(19% 0.035 155);color:oklch(75% 0.025 145);cursor:pointer;">Cancel</button>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -1387,6 +1406,17 @@
     var quickInput = document.getElementById('calendar-quickadd-input');
     var quickBtn = document.getElementById('calendar-quickadd-btn');
     var quickStatus = document.getElementById('calendar-quickadd-status');
+    var detailsToggle = document.getElementById('calendar-details-toggle');
+    var detailsForm = document.getElementById('calendar-details-form');
+    var detailTitle = document.getElementById('calendar-detail-title');
+    var detailDate = document.getElementById('calendar-detail-date');
+    var detailStart = document.getElementById('calendar-detail-start');
+    var detailEnd = document.getElementById('calendar-detail-end');
+    var detailAttendee = document.getElementById('calendar-detail-attendee');
+    var detailSuggest = document.getElementById('calendar-detail-attendee-suggestions');
+    var detailStatus = document.getElementById('calendar-detail-status');
+    var detailCreateBtn = document.getElementById('calendar-detail-create');
+    var detailCancelBtn = document.getElementById('calendar-detail-cancel');
     if (!connectBtn || !rowsEl || !badgeEl) return;
 
     var currentToken = null;
@@ -1411,6 +1441,39 @@
         if (!res.ok) return res.text().then(function (t) { throw new Error('Calendar API ' + res.status + ': ' + t); });
         return res.json();
       });
+    }
+
+    // Contact search for the attendee field — same pattern as Email's
+    // (a separate closure, so its own small copy; contacts.readonly is
+    // already granted regardless of which panel calls it).
+    function peopleFetch(path) {
+      return fetchWithTimeout('https://people.googleapis.com/v1/' + path, {
+        headers: { Authorization: 'Bearer ' + currentToken }
+      }).then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error('People API ' + res.status + ': ' + t); });
+        return res.json();
+      });
+    }
+
+    function debounce(fn, delay) {
+      var timer;
+      return function () {
+        var args = arguments;
+        clearTimeout(timer);
+        timer = setTimeout(function () { fn.apply(null, args); }, delay);
+      };
+    }
+
+    function searchContacts(query) {
+      return peopleFetch('people:searchContacts?query=' + encodeURIComponent(query) + '&readMask=names,emailAddresses&pageSize=5')
+        .then(function (data) {
+          return (data.results || []).map(function (r) {
+            var p = r.person || {};
+            var name = (p.names && p.names[0] && p.names[0].displayName) || '';
+            var email = p.emailAddresses && p.emailAddresses[0] && p.emailAddresses[0].value;
+            return email ? { name: name, email: email } : null;
+          }).filter(Boolean);
+        });
     }
 
     function parseDateOnly(s) {
@@ -1523,6 +1586,122 @@
     quickBtn.addEventListener('click', quickAdd);
     quickInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); quickAdd(); }
+    });
+
+    // Structured create — additive alongside quick-add above, for when you
+    // want an explicit date/time and an invite rather than free text.
+    var chosenAttendeeEmail = '';
+
+    if (detailsToggle && detailsForm) {
+      detailsToggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        var opening = detailsForm.style.display !== 'block';
+        detailsForm.style.display = opening ? 'block' : 'none';
+        detailsToggle.textContent = opening ? '– Add date, time & invite' : '+ Add date, time & invite';
+      });
+    }
+
+    if (detailAttendee && detailSuggest) {
+      var runAttendeeSearch = debounce(function () {
+        chosenAttendeeEmail = '';
+        var query = detailAttendee.value.trim();
+        if (query.length < 2) {
+          detailSuggest.style.display = 'none';
+          detailSuggest.innerHTML = '';
+          return;
+        }
+        searchContacts(query).then(function (matches) {
+          if (!matches.length) {
+            detailSuggest.style.display = 'none';
+            detailSuggest.innerHTML = '';
+            return;
+          }
+          detailSuggest.innerHTML = matches.map(function (c) {
+            return '<div class="calendar-attendee-suggestion" data-email="' + escapeHtml(c.email) + '" data-name="' + escapeHtml(c.name) + '" style="padding:6px 8px;font-size:12.5px;cursor:pointer;">' +
+              (c.name ? '<strong>' + escapeHtml(c.name) + '</strong> ' : '') +
+              '<span style="color:oklch(68% 0.025 145);">' + escapeHtml(c.email) + '</span>' +
+            '</div>';
+          }).join('');
+          detailSuggest.style.display = 'block';
+        }).catch(function (err) {
+          console.error('Contacts search failed:', err);
+          detailSuggest.style.display = 'none';
+        });
+      }, 250);
+      detailAttendee.addEventListener('input', runAttendeeSearch);
+      detailSuggest.addEventListener('mousedown', function (e) {
+        var item = e.target.closest && e.target.closest('.calendar-attendee-suggestion');
+        if (!item) return;
+        e.preventDefault();
+        chosenAttendeeEmail = item.getAttribute('data-email');
+        var name = item.getAttribute('data-name');
+        detailAttendee.value = name ? name + ' <' + chosenAttendeeEmail + '>' : chosenAttendeeEmail;
+        detailSuggest.style.display = 'none';
+        detailSuggest.innerHTML = '';
+      });
+      detailAttendee.addEventListener('blur', function () {
+        setTimeout(function () { detailSuggest.style.display = 'none'; }, 150);
+      });
+    }
+
+    function resetDetailsForm() {
+      detailTitle.value = '';
+      detailDate.value = '';
+      detailStart.value = '';
+      detailEnd.value = '';
+      detailAttendee.value = '';
+      chosenAttendeeEmail = '';
+    }
+
+    if (detailCancelBtn) detailCancelBtn.addEventListener('click', function () {
+      resetDetailsForm();
+      detailStatus.textContent = '';
+      detailsForm.style.display = 'none';
+      detailsToggle.textContent = '+ Add date, time & invite';
+    });
+
+    if (detailCreateBtn) detailCreateBtn.addEventListener('click', function () {
+      if (!currentToken) { alert('Click Connect Calendar first.'); return; }
+      var title = detailTitle.value.trim();
+      var date = detailDate.value;
+      var start = detailStart.value;
+      var end = detailEnd.value;
+      if (!title) { detailStatus.textContent = 'Add a title first.'; return; }
+      if (!date || !start || !end) { detailStatus.textContent = 'Add a date, start and finish time.'; return; }
+      if (end <= start) { detailStatus.textContent = 'Finish time must be after start time.'; return; }
+
+      // A plain "YYYY-MM-DDTHH:MM:SS" (no Z/offset) paired with an
+      // explicit timeZone is Calendar API's own documented shape for
+      // "this local time, in this timezone" — avoids any UTC-conversion
+      // bugs from building a Date object and re-serializing it.
+      var timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      var event = {
+        summary: title,
+        start: { dateTime: date + 'T' + start + ':00', timeZone: timeZone },
+        end: { dateTime: date + 'T' + end + ':00', timeZone: timeZone }
+      };
+      var attendeeEmail = chosenAttendeeEmail || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(detailAttendee.value.trim()) ? detailAttendee.value.trim() : '');
+      if (attendeeEmail) event.attendees = [{ email: attendeeEmail }];
+
+      detailCreateBtn.disabled = true;
+      detailStatus.textContent = 'Creating…';
+      calendarFetch('events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event)
+      }).then(function () {
+        detailStatus.textContent = 'Created.';
+        resetDetailsForm();
+        setTimeout(function () {
+          detailsForm.style.display = 'none';
+          detailsToggle.textContent = '+ Add date, time & invite';
+          detailStatus.textContent = '';
+        }, 900);
+        loadEvents(currentToken);
+      }).catch(function (err) {
+        console.error('Calendar structured create failed:', err);
+        detailStatus.textContent = 'Failed to create — see console.';
+      }).then(function () { detailCreateBtn.disabled = false; });
     });
 
     connectBtn.addEventListener('click', GoogleAuth.requestToken);
