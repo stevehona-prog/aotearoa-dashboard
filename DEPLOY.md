@@ -13,11 +13,12 @@ The dashboard runs "Bottle Green Dusk" — a dark bottle-green ground with an
 ochre accent (replacing the earlier terracotta/cream palette) and emerald
 for live/connected states. One rule carries through every panel: **any card
 still showing sample or unconnected data gets a muted terracotta
-background** instead of the standard dark-green card surface — News,
-Sports, Real Estate, Product Research, and the three sample widgets are
-always terracotta; Email and Calendar switch from terracotta to green
-automatically once you connect them (both the panel and its "Today's
-Highlights" tile). It's a from-scratch colour pass — if you spot a badge or
+background** instead of the standard dark-green card surface. Email,
+Calendar, Real Estate, Sports, and News all switch from terracotta to
+green automatically once they're connected or generating live data (both
+the panel and its "Today's Highlights" tile); Product Research and the
+three sample widgets are always terracotta. It's a from-scratch colour
+pass — if you spot a badge or
 accent that still reads oddly on the dark ground, flag it and it's a quick
 fix, not a redesign.
 
@@ -72,15 +73,13 @@ away.
 
 The Email panel connects to your real Gmail inbox, the Calendar panel to
 your real Google Calendar, the Real Estate panel reads real listings out
-of your realestate.com.au saved-search alert emails, and the Sports panel
-shows a digest a Cloudflare Worker Cron job refreshes twice a day via
-Claude and web search (see below for all four). Every other panel — news,
-product research, widgets — is realistic sample content, laid out exactly
-where live data would go once those sources are wired up. That's the next
-phase of work, and it needs a small backend (to hold API keys, refresh
-data on a schedule, and — if you want settings or added widgets to follow
-you across devices — a place to store your account's preferences). This
-static site is the front end that phase will plug into.
+of your realestate.com.au saved-search alert emails, and the Sports and
+News panels each show a digest the same Cloudflare Worker Cron job
+refreshes twice a day via Claude and web search — Sports against a fixed
+team/athlete roster, News aggregating current NZ headlines across outlets,
+filtered to stories no older than 2 days (see below for all five). Every
+other panel — product research, widgets — is realistic sample content,
+laid out exactly where live data would go once those sources are wired up.
 
 ## Real Estate panel: realestate.com.au via email alerts
 
@@ -278,10 +277,15 @@ dashboard.
 
 Setup, in addition to the Worker deploy steps above:
 
-1. Get an API key from the [Anthropic Console](https://console.anthropic.com/).
-   This only makes a couple of calls a day, so cost is not a concern for
-   personal use, but it's worth a glance at current pricing for the model
-   and web-search tool before relying on this long-term.
+1. Get an API key from the [Claude Console](https://platform.claude.com/settings/keys) —
+   create a key scoped to a specific workspace (not left as "All
+   workspaces"), or every request will need an `anthropic-workspace-id`
+   header the Worker doesn't send. You'll also need a credit balance set up
+   under Settings → Billing — the Console's free "Evaluation access" tier
+   has none by default. This only makes a couple of calls a day, so cost
+   is not a concern for personal use, but it's worth a glance at current
+   pricing for the model and web-search tool before relying on this
+   long-term.
 2. `npx wrangler secret put ANTHROPIC_API_KEY` from `worker/` — same
    encrypted-secret mechanism as `GOOGLE_CLIENT_SECRET`.
 3. `npx wrangler secret put SPORTS_RUN_SECRET` — a random string (e.g.
@@ -300,4 +304,45 @@ Setup, in addition to the Worker deploy steps above:
    (KV is untouched either way until a run fully succeeds).
 6. Reload the dashboard — the Sports panel and its Today's Highlights tile
    flip from "Sample" to "Live" automatically once `GET /sports` returns
+   real data.
+
+## News panel: digest via Cloudflare Worker Cron
+
+The News panel doesn't talk to any single news API or outlet directly —
+the same Cloudflare Worker Cron Trigger that researches Sports also asks
+Claude (via the Anthropic API, with its web search tool) to find New
+Zealand's top 3-5 current stories, aggregated across multiple outlets
+rather than tied to one source, and writes a compact JSON digest into the
+same KV store.
+
+Unlike Sports, there's no fixed roster to diff against — "today's top NZ
+stories" doesn't have stable identity from one cron firing to the next —
+so each run is a fresh snapshot rather than a diff against the last one.
+Staleness is controlled by a hard rule instead: any story whose real
+publish date is more than 48 hours old is dropped before the digest is
+written, even if the model surfaces it. If fewer than 3 stories survive
+that filter the digest is still written with whatever's left (rather than
+failing the whole run over an edge case) — but if a run fails entirely, or
+nothing survives the 48-hour filter, KV is left untouched and the panel
+falls back to its static sample content and "Sample" badge, exactly like
+every other not-yet-connected panel on this dashboard.
+
+Setup, in addition to the Sports panel's Worker deploy steps above (the
+Anthropic API key is shared — no separate key needed):
+
+1. `npx wrangler secret put NEWS_RUN_SECRET` from `worker/` — a random
+   string (e.g. `openssl rand -hex 32`) that gates the manual-trigger
+   endpoint below. Deliberately separate from `SPORTS_RUN_SECRET` so
+   either can be rotated or revoked independently.
+2. `npx wrangler deploy` — News shares Sports' existing Cron Trigger, so
+   there's nothing new to register in `wrangler.toml`.
+3. Trigger a run manually rather than waiting for the next cron firing:
+   ```bash
+   curl -H "Authorization: Bearer <your NEWS_RUN_SECRET>" \
+     https://aotearoa-dashboard-auth.stevehona.workers.dev/news/run
+   ```
+   Returns the freshly-written digest JSON, or an error if the run failed
+   (KV is untouched either way until a run fully succeeds).
+4. Reload the dashboard — the News panel and its Today's Highlights tile
+   flip from "Sample" to "Live" automatically once `GET /news` returns
    real data.

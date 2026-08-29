@@ -1,23 +1,28 @@
-// Cloudflare Worker: silent Google token renewal, and the Sports digest
-// cron job, for the Aotearoa Dashboard.
+// Cloudflare Worker: silent Google token renewal, and the Sports/News
+// digest cron jobs, for the Aotearoa Dashboard.
 //
 // Holds a real OAuth refresh token server-side (something the dashboard's
 // browser-only implicit flow can never get) so the frontend can renew its
 // access token without a popup, up to Google's Testing-mode 7-day ceiling.
 // Also runs a Cron Trigger (see wrangler.toml) that researches a fixed
 // roster of NZ sports teams/athletes via Claude and writes a digest the
-// dashboard reads — see sports.js.
+// dashboard reads — see sports.js — and, on the same schedule, finds NZ's
+// current top news stories aggregated across outlets — see news.js.
 //
 // Routes:
 //   GET /auth/start     — redirect to Google's consent screen (PKCE)
 //   GET /auth/callback  — exchange code for tokens, hand off to the frontend
 //   GET /token          — mint a fresh access token from the stored refresh token
 //   GET /sports         — read the current sports digest (public, no auth)
-//   GET /sports/run      — manually trigger a digest run (secret-gated)
+//   GET /sports/run      — manually trigger a sports digest run (secret-gated)
+//   GET /news           — read the current news digest (public, no auth)
+//   GET /news/run        — manually trigger a news digest run (secret-gated)
 //
 // Must match the scope string the frontend requests in index.html's
 // GOOGLE_SCOPE constant — keep these in sync if that ever changes.
 import { runSportsDigest, handleSportsData, handleSportsRun } from './sports.js';
+import { runNewsDigest, handleNewsData, handleNewsRun } from './news.js';
+import { corsHeaders } from './cors.js';
 
 const SCOPE = [
   'https://www.googleapis.com/auth/gmail.modify',
@@ -64,19 +69,6 @@ const DASHBOARD_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function redirectUriFor(requestUrl) {
   return new URL('/auth/callback', requestUrl).toString();
-}
-
-// CORS's Access-Control-Allow-Origin must be an origin (scheme+host+port),
-// never a path — FRONTEND_URL itself keeps the /aotearoa-dashboard path
-// because handleAuthCallback's redirect needs it, so strip it here rather
-// than send an invalid ACAO value the browser silently rejects.
-function corsHeaders(env) {
-  return {
-    'Access-Control-Allow-Origin': new URL(env.FRONTEND_URL).origin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization',
-    'Cache-Control': 'no-store'
-  };
 }
 
 async function handleAuthStart(request, env) {
@@ -225,17 +217,26 @@ export default {
     if (pathname === '/token') return handleToken(request, env);
     if (pathname === '/sports') return handleSportsData(request, env);
     if (pathname === '/sports/run') return handleSportsRun(request, env);
+    if (pathname === '/news') return handleNewsData(request, env);
+    if (pathname === '/news/run') return handleNewsRun(request, env);
 
     return new Response('Not found', { status: 404 });
   },
 
   async scheduled(event, env, ctx) {
     // Fires on the schedule in wrangler.toml's [triggers]. Errors are
-    // logged, never thrown past the Worker — a failed run leaves the last
-    // good digest in KV untouched (see runSportsDigest in sports.js).
+    // logged, never thrown past the Worker — a failed run leaves its last
+    // good digest in KV untouched (see runSportsDigest/runNewsDigest).
+    // Two independent waitUntil calls so a failure in one job can never
+    // block or skip the other.
     ctx.waitUntil(
       runSportsDigest(env).catch((err) => {
         console.error('Scheduled sports digest run failed (KV left untouched):', err);
+      })
+    );
+    ctx.waitUntil(
+      runNewsDigest(env).catch((err) => {
+        console.error('Scheduled news digest run failed (KV left untouched):', err);
       })
     );
   }

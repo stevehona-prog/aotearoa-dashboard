@@ -6,15 +6,10 @@
 // overwritten in place, and lastChecked only moves when something actually
 // changed — not every time the cron happens to fire.
 
-const KV_KEY = 'sports_digest';
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_VERSION = '2023-06-01';
+import { MODEL, WEB_SEARCH_TOOL, callAnthropic } from './anthropic.js';
+import { corsHeaders } from './cors.js';
 
-// Verify this model id and the web_search tool type against
-// platform.claude.com/docs before relying on this long-term — both can
-// change. Confirmed current as of this feature's implementation.
-const MODEL = 'claude-sonnet-5';
-const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 20 };
+const KV_KEY = 'sports_digest';
 
 const TAG_VALUES = ['Result', 'Fixture', 'News', 'Team News', 'Pre-season'];
 
@@ -105,23 +100,6 @@ function buildResearchPrompt(current) {
     'for each entity before you finish — you will be asked to submit a structured ' +
     'result afterward.'
   );
-}
-
-async function callAnthropic(env, body) {
-  var res = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': ANTHROPIC_VERSION
-    },
-    body: JSON.stringify(body)
-  });
-  var data = await res.json();
-  if (!res.ok) {
-    throw new Error('Anthropic API ' + res.status + ': ' + JSON.stringify(data));
-  }
-  return data;
 }
 
 function validateDigest(digest) {
@@ -231,24 +209,12 @@ async function runSportsDigest(env) {
   return next;
 }
 
-// Same fix as index.js's corsHeaders(): ACAO must be an origin only, never
-// a path, but FRONTEND_URL keeps its /aotearoa-dashboard path for the
-// auth redirect elsewhere — strip it down to the origin here.
-function corsHeadersFor(env) {
-  return {
-    'Access-Control-Allow-Origin': new URL(env.FRONTEND_URL).origin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization',
-    'Cache-Control': 'no-store'
-  };
-}
-
 async function handleSportsData(request, env) {
   if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeadersFor(env) });
+    return new Response(null, { status: 204, headers: corsHeaders(env) });
   }
   var raw = await env.AUTH_KV.get(KV_KEY);
-  var headers = Object.assign({}, corsHeadersFor(env), { 'Content-Type': 'application/json' });
+  var headers = Object.assign({}, corsHeaders(env), { 'Content-Type': 'application/json' });
   if (!raw) {
     return new Response(JSON.stringify({ error: 'not_generated_yet' }), { status: 404, headers: headers });
   }
@@ -256,7 +222,7 @@ async function handleSportsData(request, env) {
 }
 
 async function handleSportsRun(request, env) {
-  var headers = corsHeadersFor(env);
+  var headers = corsHeaders(env);
   var authHeader = request.headers.get('Authorization') || '';
   var presented = authHeader.indexOf('Bearer ') === 0 ? authHeader.slice(7) : '';
   if (!env.SPORTS_RUN_SECRET || presented !== env.SPORTS_RUN_SECRET) {
