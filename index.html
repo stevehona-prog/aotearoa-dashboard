@@ -315,6 +315,21 @@
         </div>
       </div>
       </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+        <span class="icobtn" id="email-top" title="Back to top" style="cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="icobtn" id="email-back" title="Previous 5" style="cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span id="email-page-position" style="font-size:11.5px;color:oklch(68% 0.025 145);">Unread 1&ndash;5</span>
+        <span class="icobtn" id="email-next" title="Next 5 unread" style="cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="email-new-trigger" placeholder="New email…" readonly style="flex:1;cursor:pointer;border:1px solid oklch(29% 0.04 155);border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;box-sizing:border-box;">
+          <span class="icobtn" id="email-new-btn" style="width:32px;height:32px;background:oklch(58% 0.13 155);color:oklch(12% 0.03 155);border-color:oklch(58% 0.13 155);cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        </div>
+        <div id="email-new-compose" style="display:none;margin-top:10px;padding:10px;border:1px solid oklch(32% 0.045 155);border-radius:8px;background:oklch(23% 0.04 155);"></div>
+      </div>
     </div>
 
     <!-- CALENDAR -->
@@ -825,11 +840,21 @@
     var connectWrap = document.getElementById('email-connect');
     var rowsEl = document.getElementById('email-rows');
     var badgeEl = document.getElementById('email-badge');
+    var topBtn = document.getElementById('email-top');
+    var backBtn = document.getElementById('email-back');
+    var nextPageBtn = document.getElementById('email-next');
+    var pagePosEl = document.getElementById('email-page-position');
+    var newTrigger = document.getElementById('email-new-trigger');
+    var newBtn = document.getElementById('email-new-btn');
+    var newComposeBox = document.getElementById('email-new-compose');
     if (!connectBtn || !rowsEl || !badgeEl) return;
 
     var currentToken = null;
     var messageStubs = {};  // id -> { id, threadId } from the inbox list
     var detailCache = {};   // id -> full headers + body, fetched lazily for reply/forward
+    var pageTokenStack = [null]; // visited pageTokens, so Back doesn't need to refetch from scratch
+    var pageIndex = 0;
+    var nextPageToken = null;
     var els = {
       badge: badgeEl,
       panel: document.getElementById('email-panel'),
@@ -972,7 +997,7 @@
         ? '<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
         : '<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m8.5 12.3 2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       return (
-        '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(stub.id) + '" target="_blank" rel="noopener" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
+        '<a href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(stub.id) + '" target="_blank" rel="noopener" data-msg-link="1" style="min-width:0;text-decoration:none;color:inherit;flex:1;">' +
           '<div style="font-size:13px;font-weight:' + (stub.unread ? '700' : '500') + ';">' + escapeHtml(stub.from) + '</div>' +
           '<div style="font-size:12.5px;color:oklch(82% 0.02 110);margin-top:2px;">' + escapeHtml(stub.subject) + '</div>' +
           '<div style="font-size:11px;color:oklch(68% 0.025 145);margin-top:3px;">' + stub.when + '</div>' +
@@ -1014,12 +1039,17 @@
     function composeFormHtml(mode, detail) {
       var toValue = mode === 'reply' ? escapeHtml(fromEmail(detail.from)) : '';
       var toReadonly = mode === 'reply' ? ' readonly' : '';
+      var label = mode === 'reply' ? 'Reply' : mode === 'forward' ? 'Forward' : 'New Email';
+      var subjectField = mode === 'new'
+        ? '<input type="text" class="compose-subject" placeholder="Subject" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;margin-bottom:6px;">'
+        : '';
       return (
-        '<div style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:oklch(68% 0.025 145);margin-bottom:6px;">' + (mode === 'reply' ? 'Reply' : 'Forward') + '</div>' +
+        '<div style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:oklch(68% 0.025 145);margin-bottom:6px;">' + label + '</div>' +
         '<div style="position:relative;margin-bottom:6px;">' +
           '<input type="text" class="compose-to" placeholder="To" value="' + toValue + '"' + toReadonly + ' autocomplete="off" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">' +
           '<div class="compose-to-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:5;background:oklch(23% 0.04 155);border:1px solid oklch(29% 0.04 155);border-radius:6px;margin-top:2px;max-height:160px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1);"></div>' +
         '</div>' +
+        subjectField +
         '<textarea class="compose-body" rows="4" placeholder="Write your message…" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;resize:vertical;"></textarea>' +
         '<div class="compose-status" style="font-size:11px;color:oklch(68% 0.025 145);margin-top:4px;min-height:14px;"></div>' +
         '<div style="display:flex;gap:8px;margin-top:8px;">' +
@@ -1036,19 +1066,21 @@
       box.innerHTML = '';
     }
 
-    function sendMessage(mode, detail, to, body) {
-      var subject = detail.subject || '(no subject)';
+    function sendMessage(mode, detail, to, body, subject) {
       var lines = ['To: ' + to];
+      var finalSubject;
       if (mode === 'reply') {
-        subject = /^re:/i.test(subject) ? subject : 'Re: ' + subject;
+        finalSubject = /^re:/i.test(detail.subject || '') ? detail.subject : 'Re: ' + detail.subject;
         if (detail.messageId) {
           lines.push('In-Reply-To: ' + detail.messageId);
           lines.push('References: ' + (detail.references ? detail.references + ' ' : '') + detail.messageId);
         }
+      } else if (mode === 'forward') {
+        finalSubject = /^fwd:/i.test(detail.subject || '') ? detail.subject : 'Fwd: ' + detail.subject;
       } else {
-        subject = /^fwd:/i.test(subject) ? subject : 'Fwd: ' + subject;
+        finalSubject = subject || '(no subject)';
       }
-      lines.push('Subject: ' + subject);
+      lines.push('Subject: ' + finalSubject);
       lines.push('Content-Type: text/plain; charset="UTF-8"');
       lines.push('MIME-Version: 1.0');
       lines.push('');
@@ -1056,10 +1088,12 @@
       var fullBody;
       if (mode === 'reply') {
         fullBody = body + '\n\nOn ' + detail.date + ', ' + fromName(detail.from) + ' wrote:\n' + quoteLines(detail.body || '');
-      } else {
+      } else if (mode === 'forward') {
         fullBody = body + '\n\n---------- Forwarded message ---------\nFrom: ' + detail.from +
           '\nDate: ' + detail.date + '\nSubject: ' + detail.subject + '\nTo: ' + detail.to +
           '\n\n' + (detail.body || '');
+      } else {
+        fullBody = body;
       }
       lines.push(fullBody);
 
@@ -1073,6 +1107,88 @@
       });
     }
 
+    // Shared wiring for a compose box regardless of where it's mounted —
+    // a reply/forward box inside a message row, or the standalone New
+    // Email box at the bottom of the panel. onClose collapses whichever
+    // box this is.
+    function renderComposeForm(box, mode, detail, onClose) {
+      box.innerHTML = composeFormHtml(mode, detail);
+      var toEl = box.querySelector('.compose-to');
+      var suggestEl = box.querySelector('.compose-to-suggestions');
+      var subjectEl = box.querySelector('.compose-subject'); // only present for mode === 'new'
+      var bodyEl = box.querySelector('.compose-body');
+      var statusEl = box.querySelector('.compose-status');
+      var sendBtn = box.querySelector('.compose-send');
+      var cancelBtn = box.querySelector('.compose-cancel');
+      cancelBtn.addEventListener('click', onClose);
+
+      if (!toEl.readOnly) {
+        var runContactSearch = debounce(function () {
+          var query = toEl.value.split(',').pop().trim();
+          if (query.length < 2) {
+            suggestEl.style.display = 'none';
+            suggestEl.innerHTML = '';
+            return;
+          }
+          searchContacts(query).then(function (matches) {
+            if (!matches.length) {
+              suggestEl.style.display = 'none';
+              suggestEl.innerHTML = '';
+              return;
+            }
+            suggestEl.innerHTML = matches.map(function (c) {
+              return '<div class="compose-to-suggestion" data-email="' + escapeHtml(c.email) + '" data-name="' + escapeHtml(c.name) + '" style="padding:6px 8px;font-size:12.5px;cursor:pointer;">' +
+                (c.name ? '<strong>' + escapeHtml(c.name) + '</strong> ' : '') +
+                '<span style="color:oklch(68% 0.025 145);">' + escapeHtml(c.email) + '</span>' +
+              '</div>';
+            }).join('');
+            suggestEl.style.display = 'block';
+          }).catch(function (err) {
+            console.error('Contacts search failed:', err);
+            suggestEl.style.display = 'none';
+          });
+        }, 250);
+        toEl.addEventListener('input', runContactSearch);
+        suggestEl.addEventListener('mousedown', function (e) {
+          var item = e.target.closest && e.target.closest('.compose-to-suggestion');
+          if (!item) return;
+          e.preventDefault();
+          var name = item.getAttribute('data-name');
+          var email = item.getAttribute('data-email');
+          var chosen = name ? name + ' <' + email + '>' : email;
+          var parts = toEl.value.split(',');
+          parts[parts.length - 1] = ' ' + chosen;
+          toEl.value = parts.map(function (p) { return p.trim(); }).join(', ') + ', ';
+          suggestEl.style.display = 'none';
+          suggestEl.innerHTML = '';
+          toEl.focus();
+        });
+        toEl.addEventListener('blur', function () {
+          setTimeout(function () { suggestEl.style.display = 'none'; }, 150);
+        });
+      }
+
+      sendBtn.addEventListener('click', function () {
+        var to = toEl.value.trim().replace(/,\s*$/, '');
+        var body = bodyEl.value;
+        var subject = subjectEl ? subjectEl.value.trim() : '';
+        if (!to) { statusEl.textContent = 'Add a recipient first.'; return; }
+        if (mode === 'new' && !subject) { statusEl.textContent = 'Add a subject first.'; return; }
+        if (!body.trim()) { statusEl.textContent = 'Write a message first.'; return; }
+        sendBtn.disabled = true;
+        statusEl.textContent = 'Sending…';
+        sendMessage(mode, detail, to, body, subject).then(function () {
+          statusEl.textContent = 'Sent.';
+          setTimeout(onClose, 900);
+        }).catch(function (err) {
+          console.error('Gmail send failed:', err);
+          sendBtn.disabled = false;
+          statusEl.textContent = 'Failed to send — see console.';
+        });
+      });
+      bodyEl.focus();
+    }
+
     function openCompose(mode, row, stub) {
       var box = row.querySelector('.email-compose');
       if (box.style.display === 'block' && box.getAttribute('data-mode') === mode) {
@@ -1083,78 +1199,7 @@
       box.setAttribute('data-mode', mode);
       box.innerHTML = '<div style="font-size:12px;color:oklch(68% 0.025 145);">Loading…</div>';
       getDetail(stub.id).then(function (detail) {
-        box.innerHTML = composeFormHtml(mode, detail);
-        var toEl = box.querySelector('.compose-to');
-        var suggestEl = box.querySelector('.compose-to-suggestions');
-        var bodyEl = box.querySelector('.compose-body');
-        var statusEl = box.querySelector('.compose-status');
-        var sendBtn = box.querySelector('.compose-send');
-        var cancelBtn = box.querySelector('.compose-cancel');
-        cancelBtn.addEventListener('click', function () { closeCompose(row); });
-
-        if (!toEl.readOnly) {
-          var runContactSearch = debounce(function () {
-            var query = toEl.value.split(',').pop().trim();
-            if (query.length < 2) {
-              suggestEl.style.display = 'none';
-              suggestEl.innerHTML = '';
-              return;
-            }
-            searchContacts(query).then(function (matches) {
-              if (!matches.length) {
-                suggestEl.style.display = 'none';
-                suggestEl.innerHTML = '';
-                return;
-              }
-              suggestEl.innerHTML = matches.map(function (c) {
-                return '<div class="compose-to-suggestion" data-email="' + escapeHtml(c.email) + '" data-name="' + escapeHtml(c.name) + '" style="padding:6px 8px;font-size:12.5px;cursor:pointer;">' +
-                  (c.name ? '<strong>' + escapeHtml(c.name) + '</strong> ' : '') +
-                  '<span style="color:oklch(68% 0.025 145);">' + escapeHtml(c.email) + '</span>' +
-                '</div>';
-              }).join('');
-              suggestEl.style.display = 'block';
-            }).catch(function (err) {
-              console.error('Contacts search failed:', err);
-              suggestEl.style.display = 'none';
-            });
-          }, 250);
-          toEl.addEventListener('input', runContactSearch);
-          suggestEl.addEventListener('mousedown', function (e) {
-            var item = e.target.closest && e.target.closest('.compose-to-suggestion');
-            if (!item) return;
-            e.preventDefault();
-            var name = item.getAttribute('data-name');
-            var email = item.getAttribute('data-email');
-            var chosen = name ? name + ' <' + email + '>' : email;
-            var parts = toEl.value.split(',');
-            parts[parts.length - 1] = ' ' + chosen;
-            toEl.value = parts.map(function (p) { return p.trim(); }).join(', ') + ', ';
-            suggestEl.style.display = 'none';
-            suggestEl.innerHTML = '';
-            toEl.focus();
-          });
-          toEl.addEventListener('blur', function () {
-            setTimeout(function () { suggestEl.style.display = 'none'; }, 150);
-          });
-        }
-
-        sendBtn.addEventListener('click', function () {
-          var to = toEl.value.trim().replace(/,\s*$/, '');
-          var body = bodyEl.value;
-          if (!to) { statusEl.textContent = 'Add a recipient first.'; return; }
-          if (!body.trim()) { statusEl.textContent = 'Write a message first.'; return; }
-          sendBtn.disabled = true;
-          statusEl.textContent = 'Sending…';
-          sendMessage(mode, detail, to, body).then(function () {
-            statusEl.textContent = 'Sent.';
-            setTimeout(function () { closeCompose(row); }, 900);
-          }).catch(function (err) {
-            console.error('Gmail send failed:', err);
-            sendBtn.disabled = false;
-            statusEl.textContent = 'Failed to send — see console.';
-          });
-        });
-        bodyEl.focus();
+        renderComposeForm(box, mode, detail, function () { closeCompose(row); });
       }).catch(function (err) {
         console.error('Gmail detail fetch failed:', err);
         box.innerHTML = '<div style="font-size:12px;color:oklch(74% 0.14 68);">Couldn’t load message — see console.</div>';
@@ -1177,7 +1222,34 @@
       });
     }
 
+    // Opening a message: on iOS, best-effort try the Gmail app first (it's
+    // only ever reliably documented to open the app generally, not jump
+    // straight to a specific message — there's no confirmed API for that,
+    // so this is a bonus attempt, not a guarantee), falling back to the
+    // same gmail.com web view used everywhere else if the app doesn't
+    // take over. Desktop/Android keep the plain link, unchanged.
+    var IS_IOS = /iP(hone|od|ad)/.test(navigator.userAgent);
+
+    function openGmailMessage(id, webUrl) {
+      if (!IS_IOS) { window.open(webUrl, '_blank'); return; }
+      var fallbackTimer = setTimeout(function () { window.open(webUrl, '_blank'); }, 800);
+      function onVisibilityChange() {
+        if (document.hidden) {
+          clearTimeout(fallbackTimer);
+          document.removeEventListener('visibilitychange', onVisibilityChange);
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      location.href = 'googlegmail://';
+    }
+
     rowsEl.addEventListener('click', function (e) {
+      var link = e.target.closest && e.target.closest('a[data-msg-link]');
+      if (link && IS_IOS) {
+        e.preventDefault();
+        openGmailMessage(link.closest('.rowline').getAttribute('data-msg-id'), link.href);
+        return;
+      }
       var btn = e.target.closest && e.target.closest('.icobtn[data-action]');
       if (!btn) return;
       e.preventDefault();
@@ -1214,13 +1286,20 @@
       });
     }
 
-    function loadInbox(accessToken) {
+    // Pages through UNREAD inbox mail 5 at a time — Top resets to the
+    // first page, Back/Next move using Gmail's own pageToken, with
+    // pageTokenStack caching each page's token so Back never needs to
+    // refetch from the start.
+    function loadInbox(accessToken, pageToken) {
       currentToken = accessToken;
       warmContactsCache();
       rowsEl.innerHTML = koruSpinnerHtml();
       setPanelState(els, 'loading');
-      gmailFetch('messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX')
+      var query = 'messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX&labelIds=UNREAD';
+      if (pageToken) query += '&pageToken=' + encodeURIComponent(pageToken);
+      gmailFetch(query)
         .then(function (data) {
+          nextPageToken = data.nextPageToken || null;
           var ids = (data.messages || []).map(function (m) { return m.id; });
           if (!ids.length) { renderMessages([]); setPanelState(els, 'live'); return; }
           return Promise.all(ids.map(function (id) {
@@ -1231,7 +1310,18 @@
             connectWrap.style.display = 'none';
           });
         })
-        .then(function () { updateHighlight(); })
+        .then(function () {
+          updateHighlight();
+          var shown = Object.keys(messageStubs).length;
+          if (!shown) {
+            pagePosEl.textContent = pageIndex === 0 ? 'No unread mail' : 'No more unread mail';
+          } else {
+            var start = pageIndex * GMAIL_MAX_RESULTS + 1;
+            pagePosEl.textContent = 'Unread ' + start + '–' + (start + shown - 1);
+          }
+          backBtn.style.opacity = pageIndex === 0 ? '0.4' : '';
+          nextPageBtn.style.opacity = nextPageToken ? '' : '0.4';
+        })
         .catch(function (err) {
           console.error('Gmail fetch failed:', err);
           rowsEl.innerHTML = panelErrorHtml(classifyFetchError(err));
@@ -1242,11 +1332,43 @@
         });
     }
 
+    if (topBtn) topBtn.addEventListener('click', function () {
+      if (!currentToken || pageIndex === 0) return;
+      pageIndex = 0;
+      pageTokenStack = [null];
+      loadInbox(currentToken, null);
+    });
+    if (backBtn) backBtn.addEventListener('click', function () {
+      if (!currentToken || pageIndex === 0) return;
+      pageIndex--;
+      loadInbox(currentToken, pageTokenStack[pageIndex]);
+    });
+    if (nextPageBtn) nextPageBtn.addEventListener('click', function () {
+      if (!currentToken || !nextPageToken) return;
+      pageIndex++;
+      pageTokenStack[pageIndex] = nextPageToken;
+      loadInbox(currentToken, nextPageToken);
+    });
+
+    if (newTrigger && newBtn && newComposeBox) {
+      var openNewCompose = function () {
+        if (newComposeBox.style.display === 'block') { closeNewCompose(); return; }
+        newComposeBox.style.display = 'block';
+        renderComposeForm(newComposeBox, 'new', {}, closeNewCompose);
+      };
+      newTrigger.addEventListener('click', openNewCompose);
+      newBtn.addEventListener('click', openNewCompose);
+    }
+    function closeNewCompose() {
+      newComposeBox.style.display = 'none';
+      newComposeBox.innerHTML = '';
+    }
+
     connectBtn.addEventListener('click', GoogleAuth.requestToken);
 
     GoogleAuth.onToken(function (token) {
       if (token) {
-        loadInbox(token);
+        loadInbox(token, null);
       } else {
         setPanelState(els, 'sample', 'Not connected');
       }
