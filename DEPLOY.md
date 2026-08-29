@@ -71,15 +71,16 @@ away.
 ## What's live vs. sample right now
 
 The Email panel connects to your real Gmail inbox, the Calendar panel to
-your real Google Calendar, and the Real Estate panel reads real listings
-out of your realestate.com.au saved-search alert emails (see below for
-all three). Every other panel — news, sports, product research, widgets —
-is realistic sample content, laid out exactly where live data would go
-once those sources are wired up. That's the next phase of work, and it
-needs a small backend (to hold API keys, refresh data on a schedule, and
-— if you want settings or added widgets to follow you across devices — a
-place to store your account's preferences). This static site is the
-front end that phase will plug into.
+your real Google Calendar, the Real Estate panel reads real listings out
+of your realestate.com.au saved-search alert emails, and the Sports panel
+shows a digest a Cloudflare Worker Cron job refreshes twice a day via
+Claude and web search (see below for all four). Every other panel — news,
+product research, widgets — is realistic sample content, laid out exactly
+where live data would go once those sources are wired up. That's the next
+phase of work, and it needs a small backend (to hold API keys, refresh
+data on a schedule, and — if you want settings or added widgets to follow
+you across devices — a place to store your account's preferences). This
+static site is the front end that phase will plug into.
 
 ## Real Estate panel: realestate.com.au via email alerts
 
@@ -251,3 +252,52 @@ your Google credentials) — even someone who found the Worker's URL
 couldn't use it to access your Gmail without also having that credential,
 and `/auth/start` itself is gated by Google's own Test-user list the same
 way the in-browser flow already is.
+
+## Sports panel: digest via Cloudflare Worker Cron
+
+The Sports panel doesn't talk to any sports data API directly — there
+isn't one clean, free source that covers all 12 tracked teams/athletes at
+once (six rugby teams, the Black Caps, and five "NZ Abroad" categories:
+golf, athletics, basketball, motor racing, sailing). Instead, the same
+Cloudflare Worker that handles Google auth also runs a **Cron Trigger**
+twice a day that asks Claude (via the Anthropic API, with its web search
+tool) to research that fixed roster, and writes one compact JSON digest
+into the same KV store the auth flow uses. The dashboard just fetches that
+digest on page load — no Google auth involved, since none of this is
+private data.
+
+Each cron run reads what's currently in KV before calling Claude, and asks
+it to diff against that rather than blindly overwrite — so a fixture
+naturally becomes a result once it's been played, and a "last checked"
+timestamp per entity only moves when something actually changed, not
+every time the cron happens to fire. If a run fails or Claude's response
+doesn't parse into the expected shape, KV is left untouched — the panel
+falls back to the same static sample content (and "Sample" badge) it
+ships with, exactly like every other not-yet-connected panel on this
+dashboard.
+
+Setup, in addition to the Worker deploy steps above:
+
+1. Get an API key from the [Anthropic Console](https://console.anthropic.com/).
+   This only makes a couple of calls a day, so cost is not a concern for
+   personal use, but it's worth a glance at current pricing for the model
+   and web-search tool before relying on this long-term.
+2. `npx wrangler secret put ANTHROPIC_API_KEY` from `worker/` — same
+   encrypted-secret mechanism as `GOOGLE_CLIENT_SECRET`.
+3. `npx wrangler secret put SPORTS_RUN_SECRET` — a random string (e.g.
+   `openssl rand -hex 32`) that gates the manual-trigger endpoint below.
+4. `npx wrangler deploy` — this also registers the Cron Trigger defined in
+   `wrangler.toml`'s `[triggers]` block (twice daily, pinned to roughly
+   6am/6pm NZ time — see the comment there for the UTC/DST tradeoff, and
+   how to adjust it).
+5. Don't want to wait up to 12 hours for the first cron firing? Trigger a
+   run manually:
+   ```bash
+   curl -H "Authorization: Bearer <your SPORTS_RUN_SECRET>" \
+     https://aotearoa-dashboard-auth.stevehona.workers.dev/sports/run
+   ```
+   Returns the freshly-written digest JSON, or an error if the run failed
+   (KV is untouched either way until a run fully succeeds).
+6. Reload the dashboard — the Sports panel and its Today's Highlights tile
+   flip from "Sample" to "Live" automatically once `GET /sports` returns
+   real data.

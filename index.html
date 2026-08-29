@@ -104,11 +104,11 @@
       <div style="font-size:11.5px;color:oklch(68% 0.025 145);margin-top:2px;">OCR held at 3.25%</div>
     </div>
 
-    <div class="card" style="padding:14px 16px;background:oklch(24% 0.07 45);border-color:oklch(38% 0.09 48);">
+    <a href="#sports-panel" class="card" id="highlight-sports-tile" style="padding:14px 16px;display:block;text-decoration:none;color:inherit;background:oklch(24% 0.07 45);border-color:oklch(38% 0.09 48);">
       <svg width="18" height="18" viewBox="0 0 24 24" style="color:oklch(74% 0.14 68);"><ellipse cx="12" cy="12" rx="9" ry="5.4" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 13.5 16 8M9 16l9-8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
       <div style="font-size:12px;font-weight:600;margin-top:8px;">Sports</div>
-      <div style="font-size:11.5px;color:oklch(68% 0.025 145);margin-top:2px;">Black Ferns Sevens 2nd, Cape Town</div>
-    </div>
+      <div id="highlight-sports-sub" style="font-size:11.5px;color:oklch(68% 0.025 145);margin-top:2px;">Black Ferns Sevens 2nd, Cape Town</div>
+    </a>
 
     <a href="#email-panel" class="card" id="highlight-email-tile" style="padding:14px 16px;display:block;text-decoration:none;color:inherit;background:oklch(24% 0.07 45);border-color:oklch(38% 0.09 48);">
       <svg width="18" height="18" viewBox="0 0 24 24" style="color:oklch(74% 0.14 68);"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -171,18 +171,18 @@
     </div>
 
     <!-- SPORTS -->
-    <div class="card" style="background:oklch(24% 0.07 45);border-color:oklch(38% 0.09 48);">
+    <div class="card" id="sports-panel" style="background:oklch(24% 0.07 45);border-color:oklch(38% 0.09 48);">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:10px;">
           <svg width="20" height="20" viewBox="0 0 24 24" style="color:oklch(74% 0.14 68);"><ellipse cx="12" cy="12" rx="9" ry="5.4" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 13.5 16 8M9 16l9-8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
           <h2 style="font-family:'Spectral',Georgia,serif;font-size:18px;font-weight:600;margin:0;">Sports</h2>
         </div>
-        <span class="badge" style="background:oklch(30% 0.11 45);color:oklch(88% 0.09 65);">Sample</span>
+        <span class="badge" id="sports-badge" style="background:oklch(30% 0.11 45);color:oklch(88% 0.09 65);">Sample</span>
       </div>
       <svg width="60" height="10" viewBox="0 0 60 10" style="margin:8px 0 14px;"><rect x="0" y="8" width="6" height="2" fill="oklch(78% 0.1 40)"/><rect x="10" y="6" width="6" height="4" fill="oklch(70% 0.12 38)"/><rect x="20" y="4" width="6" height="6" fill="oklch(62% 0.14 36)"/><rect x="30" y="2" width="6" height="8" fill="oklch(74% 0.14 68)"/></svg>
 
       <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:oklch(58% 0.13 155);margin-bottom:8px;">Rugby</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div id="sports-rugby-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
         <div style="border:1px solid oklch(32% 0.045 155);border-radius:8px;padding:10px 12px;">
           <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12.5px;font-weight:700;">All Blacks</span><span class="badge" style="background:oklch(26% 0.07 155);color:oklch(82% 0.14 155);">Team News</span></div>
           <div style="font-size:12px;margin-top:5px;">Squad named for Rugby Championship finale vs Springboks</div>
@@ -210,13 +210,13 @@
       </div>
 
       <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:oklch(58% 0.13 155);margin-bottom:8px;">Cricket</div>
-      <div style="border:1px solid oklch(32% 0.045 155);border-radius:8px;padding:10px 12px;margin-bottom:16px;">
+      <div id="sports-cricket-card" style="border:1px solid oklch(32% 0.045 155);border-radius:8px;padding:10px 12px;margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12.5px;font-weight:700;">Black Caps</span><span class="badge" style="background:oklch(90% 0.08 145);color:oklch(30% 0.1 145);">Result</span></div>
         <div style="font-size:12px;margin-top:5px;">Clinched ODI series 3&ndash;2 over Pakistan in Christchurch decider</div>
       </div>
 
       <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:oklch(58% 0.13 155);margin-bottom:8px;">NZ Abroad</div>
-      <div style="display:flex;flex-direction:column;gap:9px;">
+      <div id="sports-abroad-list" style="display:flex;flex-direction:column;gap:9px;">
         <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:12px;"><strong>Golf</strong> &middot; Lydia Ko fires final-round 66 to finish T3</span></div>
         <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:12px;"><strong>Athletics</strong> &middot; NZ 800m record broken at Diamond League meet</span></div>
         <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:12px;"><strong>Basketball</strong> &middot; Tall Blacks confirm roster for FIBA Asia Cup qualifiers</span></div>
@@ -1538,6 +1538,105 @@
         setBadge('Not connected', false);
       }
     });
+  })();
+
+  // --- Sports: reads a pre-computed digest a Cloudflare Worker Cron job
+  // writes to KV twice daily (Claude + web search researches a fixed
+  // roster of NZ teams/athletes). Public, non-sensitive data — no Google
+  // auth involved, and no "Error" state: any failure just leaves the
+  // static sample content and "Sample" badge exactly as shipped.
+  (function () {
+    var badgeEl = document.getElementById('sports-badge');
+    var panelEl = document.getElementById('sports-panel');
+    var tileEl = document.getElementById('highlight-sports-tile');
+    var rugbyEl = document.getElementById('sports-rugby-grid');
+    var cricketEl = document.getElementById('sports-cricket-card');
+    var abroadEl = document.getElementById('sports-abroad-list');
+    if (!badgeEl || !rugbyEl || !cricketEl || !abroadEl || !WORKER_BASE_URL) return;
+
+    var RUGBY_ORDER = ['all_blacks', 'crusaders', 'canterbury', 'reds', 'black_ferns', 'black_ferns_sevens'];
+    var ABROAD_ORDER = ['golf', 'athletics', 'basketball', 'motor_racing', 'sailing'];
+    var TAG_COLORS = {
+      'Result':     ['oklch(90% 0.08 145)', 'oklch(30% 0.1 145)'],
+      'Team News':  ['oklch(26% 0.07 155)', 'oklch(82% 0.14 155)'],
+      'News':       ['oklch(26% 0.07 155)', 'oklch(82% 0.14 155)'],
+      'Fixture':    ['oklch(92% 0.05 70)', 'oklch(40% 0.1 60)'],
+      'Pre-season': ['oklch(92% 0.05 70)', 'oklch(40% 0.1 60)']
+    };
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function setBadge(text, live) {
+      badgeEl.textContent = text;
+      badgeEl.style.background = live ? 'oklch(26% 0.07 155)' : 'oklch(30% 0.11 45)';
+      badgeEl.style.color = live ? 'oklch(82% 0.14 155)' : 'oklch(88% 0.09 65)';
+      [panelEl, tileEl].forEach(function (el) {
+        if (!el) return;
+        el.style.background = live ? 'oklch(19% 0.035 155)' : 'oklch(24% 0.07 45)';
+        el.style.borderColor = live ? 'oklch(32% 0.045 155)' : 'oklch(38% 0.09 48)';
+      });
+    }
+
+    function cardInnerHtml(entity) {
+      var colors = TAG_COLORS[entity.tag] || TAG_COLORS.News;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-size:12.5px;font-weight:700;">' + escapeHtml(entity.label) + '</span>' +
+        '<span class="badge" style="background:' + colors[0] + ';color:' + colors[1] + ';">' + escapeHtml(entity.tag) + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;margin-top:5px;">' + escapeHtml(entity.line) + '</div>';
+    }
+
+    function teamCardHtml(entity) {
+      return '<div style="border:1px solid oklch(32% 0.045 155);border-radius:8px;padding:10px 12px;">' + cardInnerHtml(entity) + '</div>';
+    }
+
+    function abroadRowHtml(entity) {
+      return '<div style="display:flex;justify-content:space-between;gap:10px;">' +
+        '<span style="font-size:12px;"><strong>' + escapeHtml(entity.label) + '</strong> &middot; ' + escapeHtml(entity.line) + '</span></div>';
+    }
+
+    function render(digest) {
+      var entities = digest.entities;
+      var allIds = RUGBY_ORDER.concat(['black_caps']).concat(ABROAD_ORDER);
+      for (var i = 0; i < allIds.length; i++) {
+        if (!entities[allIds[i]]) return false;
+      }
+      rugbyEl.innerHTML = RUGBY_ORDER.map(function (id) { return teamCardHtml(entities[id]); }).join('');
+      cricketEl.innerHTML = cardInnerHtml(entities.black_caps);
+      abroadEl.innerHTML = ABROAD_ORDER.map(function (id) { return abroadRowHtml(entities[id]); }).join('');
+      return true;
+    }
+
+    function updateHighlight(digest) {
+      var subEl = document.getElementById('highlight-sports-sub');
+      if (!subEl) return;
+      var newest = null;
+      Object.keys(digest.entities).forEach(function (id) {
+        var e = digest.entities[id];
+        if (!newest || (e.lastChecked || '') > (newest.lastChecked || '')) newest = e;
+      });
+      if (newest) subEl.textContent = newest.line;
+    }
+
+    fetch(WORKER_BASE_URL + '/sports')
+      .then(function (res) {
+        if (!res.ok) throw new Error('sports fetch failed: ' + res.status);
+        return res.json();
+      })
+      .then(function (digest) {
+        if (!digest || !digest.entities || !render(digest)) throw new Error('malformed sports digest');
+        updateHighlight(digest);
+        setBadge('Live', true);
+      })
+      .catch(function (err) {
+        console.warn('Sports digest fetch failed, showing sample content:', err);
+        // Deliberately no visible failure state — static sample markup and
+        // "Sample" badge are already correct and untouched.
+      });
   })();
 </script>
 

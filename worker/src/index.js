@@ -1,16 +1,24 @@
-// Cloudflare Worker: silent Google token renewal for the Aotearoa Dashboard.
+// Cloudflare Worker: silent Google token renewal, and the Sports digest
+// cron job, for the Aotearoa Dashboard.
 //
 // Holds a real OAuth refresh token server-side (something the dashboard's
 // browser-only implicit flow can never get) so the frontend can renew its
 // access token without a popup, up to Google's Testing-mode 7-day ceiling.
+// Also runs a Cron Trigger (see wrangler.toml) that researches a fixed
+// roster of NZ sports teams/athletes via Claude and writes a digest the
+// dashboard reads — see sports.js.
 //
 // Routes:
 //   GET /auth/start     — redirect to Google's consent screen (PKCE)
 //   GET /auth/callback  — exchange code for tokens, hand off to the frontend
 //   GET /token          — mint a fresh access token from the stored refresh token
+//   GET /sports         — read the current sports digest (public, no auth)
+//   GET /sports/run      — manually trigger a digest run (secret-gated)
 //
 // Must match the scope string the frontend requests in index.html's
 // GOOGLE_SCOPE constant — keep these in sync if that ever changes.
+import { runSportsDigest, handleSportsData, handleSportsRun } from './sports.js';
+
 const SCOPE = [
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',
@@ -211,7 +219,20 @@ export default {
     if (pathname === '/auth/start') return handleAuthStart(request, env);
     if (pathname === '/auth/callback') return handleAuthCallback(request, env);
     if (pathname === '/token') return handleToken(request, env);
+    if (pathname === '/sports') return handleSportsData(request, env);
+    if (pathname === '/sports/run') return handleSportsRun(request, env);
 
     return new Response('Not found', { status: 404 });
+  },
+
+  async scheduled(event, env, ctx) {
+    // Fires on the schedule in wrangler.toml's [triggers]. Errors are
+    // logged, never thrown past the Worker — a failed run leaves the last
+    // good digest in KV untouched (see runSportsDigest in sports.js).
+    ctx.waitUntil(
+      runSportsDigest(env).catch((err) => {
+        console.error('Scheduled sports digest run failed (KV left untouched):', err);
+      })
+    );
   }
 };
