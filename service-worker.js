@@ -1,6 +1,6 @@
 // Bump this string on every deploy you want viewers to pick up promptly.
 // It's what forces old caches to be thrown away — see the "activate" handler below.
-const CACHE_VERSION = "v12";
+const CACHE_VERSION = "v13";
 const CACHE_NAME = `aotearoa-dashboard-${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [

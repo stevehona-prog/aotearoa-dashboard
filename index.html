@@ -40,7 +40,7 @@
      against the browser's own white input background. Fix once, globally,
      rather than per-field, so every current and future form control
      (compose To/body, new event fields, etc.) is correct automatically. */
-  input[type="text"], input[type="date"], input[type="time"], input[type="email"], textarea {
+  input[type="text"], input[type="date"], input[type="time"], input[type="email"], textarea, select {
     background: oklch(23% 0.04 155);
     color: oklch(94% 0.02 90);
   }
@@ -373,18 +373,16 @@
       </div>
 
       <div style="display:flex;gap:8px;margin-top:14px;">
-        <input type="text" id="calendar-quickadd-input" placeholder="Quick add an event…" style="flex:1;border:1px solid oklch(29% 0.04 155);border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;box-sizing:border-box;">
-        <span class="icobtn" id="calendar-quickadd-btn" style="width:32px;height:32px;background:oklch(58% 0.13 155);color:oklch(12% 0.03 155);border-color:oklch(58% 0.13 155);cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <input type="text" id="calendar-new-trigger" placeholder="New event…" readonly style="flex:1;cursor:pointer;border:1px solid oklch(29% 0.04 155);border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;box-sizing:border-box;">
+        <span class="icobtn" id="calendar-new-btn" style="width:32px;height:32px;background:oklch(58% 0.13 155);color:oklch(12% 0.03 155);border-color:oklch(58% 0.13 155);cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
       </div>
-      <div id="calendar-quickadd-status" style="font-size:11px;color:oklch(68% 0.025 145);margin-top:4px;min-height:14px;"></div>
 
-      <a href="#" id="calendar-details-toggle" style="display:inline-block;font-size:11.5px;font-weight:600;margin-top:8px;">+ Add date, time &amp; invite</a>
       <div id="calendar-details-form" style="display:none;margin-top:10px;padding:10px;border:1px solid oklch(32% 0.045 155);border-radius:8px;background:oklch(23% 0.04 155);">
         <input type="text" id="calendar-detail-title" placeholder="Event title" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;margin-bottom:6px;">
         <input type="date" id="calendar-detail-date" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;margin-bottom:6px;">
         <div style="display:flex;gap:8px;margin-bottom:6px;">
           <input type="time" id="calendar-detail-start" style="flex:1;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">
-          <input type="time" id="calendar-detail-end" style="flex:1;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">
+          <select id="calendar-detail-duration" style="flex:1;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;"></select>
         </div>
         <div style="position:relative;margin-bottom:6px;">
           <input type="text" id="calendar-detail-attendee" placeholder="Invite (optional)" autocomplete="off" style="width:100%;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid oklch(29% 0.04 155);border-radius:6px;box-sizing:border-box;">
@@ -1405,15 +1403,13 @@
     var connectWrap = document.getElementById('calendar-connect');
     var rowsEl = document.getElementById('calendar-rows');
     var badgeEl = document.getElementById('calendar-badge');
-    var quickInput = document.getElementById('calendar-quickadd-input');
-    var quickBtn = document.getElementById('calendar-quickadd-btn');
-    var quickStatus = document.getElementById('calendar-quickadd-status');
-    var detailsToggle = document.getElementById('calendar-details-toggle');
+    var newTrigger = document.getElementById('calendar-new-trigger');
+    var newBtn = document.getElementById('calendar-new-btn');
     var detailsForm = document.getElementById('calendar-details-form');
     var detailTitle = document.getElementById('calendar-detail-title');
     var detailDate = document.getElementById('calendar-detail-date');
     var detailStart = document.getElementById('calendar-detail-start');
-    var detailEnd = document.getElementById('calendar-detail-end');
+    var detailDuration = document.getElementById('calendar-detail-duration');
     var detailAttendee = document.getElementById('calendar-detail-attendee');
     var detailSuggest = document.getElementById('calendar-detail-attendee-suggestions');
     var detailStatus = document.getElementById('calendar-detail-status');
@@ -1562,45 +1558,65 @@
         });
     }
 
-    function quickAdd() {
-      var text = quickInput.value.trim();
-      if (!text) return;
-      if (!currentToken) {
-        alert('Click Connect Calendar first.');
-        return;
-      }
-      quickBtn.style.opacity = '0.5';
-      quickStatus.textContent = 'Adding…';
-      calendarFetch('events/quickAdd?text=' + encodeURIComponent(text), { method: 'POST' })
-        .then(function () {
-          quickInput.value = '';
-          quickStatus.textContent = 'Added.';
-          setTimeout(function () { quickStatus.textContent = ''; }, 2000);
-          loadEvents(currentToken);
-        })
-        .catch(function (err) {
-          console.error('Calendar quick add failed:', err);
-          quickStatus.textContent = 'Failed to add — see console.';
-        })
-        .then(function () { quickBtn.style.opacity = ''; });
-    }
-
-    quickBtn.addEventListener('click', quickAdd);
-    quickInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); quickAdd(); }
-    });
-
-    // Structured create — additive alongside quick-add above, for when you
-    // want an explicit date/time and an invite rather than free text.
+    // One structured create flow, triggered by the input/+ button pair —
+    // same pattern as Email's New Email trigger — rather than a separate
+    // free-text quick-add plus a hidden details toggle underneath it.
     var chosenAttendeeEmail = '';
 
-    if (detailsToggle && detailsForm) {
-      detailsToggle.addEventListener('click', function (e) {
-        e.preventDefault();
-        var opening = detailsForm.style.display !== 'block';
-        detailsForm.style.display = opening ? 'block' : 'none';
-        detailsToggle.textContent = opening ? '– Add date, time & invite' : '+ Add date, time & invite';
-      });
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function todayIso() {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    }
+
+    // Nearest half-hour at or after right now, so opening the form always
+    // proposes a sensible near-future start rather than an empty field.
+    function nextHalfHour() {
+      var d = new Date();
+      var add = (30 - (d.getMinutes() % 30)) % 30;
+      d = new Date(d.getTime() + add * 60000);
+      return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+
+    function durationLabel(minutes) {
+      if (minutes < 60) return minutes + ' min';
+      var hrs = Math.floor(minutes / 60);
+      var rem = minutes % 60;
+      return hrs + ' hr' + (hrs > 1 ? 's' : '') + (rem ? ' ' + rem + ' min' : '');
+    }
+
+    // 15-minute increments up to 12 hours — a duration (not an absolute
+    // end time) so an invite that runs past midnight just works, no
+    // separate "next day" handling needed.
+    if (detailDuration) {
+      var durationHtml = '';
+      for (var mins = 15; mins <= 720; mins += 15) {
+        durationHtml += '<option value="' + mins + '"' + (mins === 60 ? ' selected' : '') + '>' + durationLabel(mins) + '</option>';
+      }
+      detailDuration.innerHTML = durationHtml;
+    }
+
+    function openDetailsForm() {
+      detailsForm.style.display = 'block';
+      detailDate.value = todayIso();
+      detailStart.value = nextHalfHour();
+      detailDuration.value = '60';
+      detailTitle.focus();
+    }
+
+    function closeDetailsForm() {
+      detailsForm.style.display = 'none';
+      resetDetailsForm();
+      detailStatus.textContent = '';
+    }
+
+    if (newTrigger && newBtn && detailsForm) {
+      var toggleDetailsForm = function () {
+        if (detailsForm.style.display === 'block') { closeDetailsForm(); } else { openDetailsForm(); }
+      };
+      newTrigger.addEventListener('click', toggleDetailsForm);
+      newBtn.addEventListener('click', toggleDetailsForm);
     }
 
     if (detailAttendee && detailSuggest) {
@@ -1650,27 +1666,35 @@
       detailTitle.value = '';
       detailDate.value = '';
       detailStart.value = '';
-      detailEnd.value = '';
+      detailDuration.value = '60';
       detailAttendee.value = '';
       chosenAttendeeEmail = '';
     }
 
-    if (detailCancelBtn) detailCancelBtn.addEventListener('click', function () {
-      resetDetailsForm();
-      detailStatus.textContent = '';
-      detailsForm.style.display = 'none';
-      detailsToggle.textContent = '+ Add date, time & invite';
-    });
+    if (detailCancelBtn) detailCancelBtn.addEventListener('click', closeDetailsForm);
+
+    // Duration + start, rather than an absolute end time, so an invite
+    // that runs past midnight rolls onto the next calendar date on its
+    // own — Date's own arithmetic handles the carry, no manual check.
+    function computeEnd(dateStr, startStr, durationMinutes) {
+      var start = new Date(dateStr + 'T' + startStr + ':00');
+      var end = new Date(start.getTime() + durationMinutes * 60000);
+      return {
+        date: end.getFullYear() + '-' + pad2(end.getMonth() + 1) + '-' + pad2(end.getDate()),
+        time: pad2(end.getHours()) + ':' + pad2(end.getMinutes())
+      };
+    }
 
     if (detailCreateBtn) detailCreateBtn.addEventListener('click', function () {
       if (!currentToken) { alert('Click Connect Calendar first.'); return; }
       var title = detailTitle.value.trim();
       var date = detailDate.value;
       var start = detailStart.value;
-      var end = detailEnd.value;
+      var durationMinutes = Number(detailDuration.value) || 60;
       if (!title) { detailStatus.textContent = 'Add a title first.'; return; }
-      if (!date || !start || !end) { detailStatus.textContent = 'Add a date, start and finish time.'; return; }
-      if (end <= start) { detailStatus.textContent = 'Finish time must be after start time.'; return; }
+      if (!date || !start) { detailStatus.textContent = 'Add a date and start time.'; return; }
+
+      var end = computeEnd(date, start, durationMinutes);
 
       // A plain "YYYY-MM-DDTHH:MM:SS" (no Z/offset) paired with an
       // explicit timeZone is Calendar API's own documented shape for
@@ -1680,7 +1704,7 @@
       var event = {
         summary: title,
         start: { dateTime: date + 'T' + start + ':00', timeZone: timeZone },
-        end: { dateTime: date + 'T' + end + ':00', timeZone: timeZone }
+        end: { dateTime: end.date + 'T' + end.time + ':00', timeZone: timeZone }
       };
       var attendeeEmail = chosenAttendeeEmail || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(detailAttendee.value.trim()) ? detailAttendee.value.trim() : '');
       if (attendeeEmail) event.attendees = [{ email: attendeeEmail }];
@@ -1693,12 +1717,7 @@
         body: JSON.stringify(event)
       }).then(function () {
         detailStatus.textContent = 'Created.';
-        resetDetailsForm();
-        setTimeout(function () {
-          detailsForm.style.display = 'none';
-          detailsToggle.textContent = '+ Add date, time & invite';
-          detailStatus.textContent = '';
-        }, 900);
+        setTimeout(closeDetailsForm, 900);
         loadEvents(currentToken);
       }).catch(function (err) {
         console.error('Calendar structured create failed:', err);
