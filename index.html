@@ -1421,7 +1421,9 @@
   // editing the saved search itself still happens on their site directly.
   var REALESTATE_MAX = 10;
   var REALESTATE_SEARCH_COUNT = 20;
-  var REALESTATE_PAGE_SIZE = 4;
+  var REALESTATE_CARD_MIN = 320;
+  var REALESTATE_GRID_GAP = 14;
+  var REALESTATE_ROWS_PER_PAGE = 2;
 
   (function () {
     var els = {
@@ -1558,10 +1560,23 @@
       posEl.textContent = '0 of 0';
     }
 
+    // Match the grid's own repeat(auto-fit,minmax(320px,1fr)) math so the
+    // page size always fills whole rows — no dangling gap on a second row
+    // when there were plenty more listings available to fill it.
+    function currentColumns() {
+      var width = cardsEl.clientWidth || 0;
+      return Math.max(1, Math.floor((width + REALESTATE_GRID_GAP) / (REALESTATE_CARD_MIN + REALESTATE_GRID_GAP)));
+    }
+
+    function currentPageSize() {
+      return currentColumns() * REALESTATE_ROWS_PER_PAGE;
+    }
+
     function renderPage() {
       if (!listings.length) { renderEmpty(); return; }
-      var start = page * REALESTATE_PAGE_SIZE;
-      var pageListings = listings.slice(start, start + REALESTATE_PAGE_SIZE);
+      var pageSize = currentPageSize();
+      var start = page * pageSize;
+      var pageListings = listings.slice(start, start + pageSize);
       cardsEl.innerHTML = pageListings.map(listingCardHtml).join('');
       var shown = start + pageListings.length;
       posEl.textContent = pageListings.length > 1
@@ -1570,7 +1585,7 @@
     }
 
     function pageCount() {
-      return Math.max(1, Math.ceil(listings.length / REALESTATE_PAGE_SIZE));
+      return Math.max(1, Math.ceil(listings.length / currentPageSize()));
     }
 
     prevBtn.addEventListener('click', function () {
