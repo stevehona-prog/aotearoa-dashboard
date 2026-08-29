@@ -44,9 +44,13 @@ function entitySchema() {
       eventDate: {
         type: 'string',
         description: 'ISO date (YYYY-MM-DD) of the real-world event this line describes. If changed is false, repeat the current eventDate unchanged.'
+      },
+      url: {
+        type: 'string',
+        description: 'A direct source URL for this item, from your web search results. Empty string if you genuinely have no single good source URL for it. If changed is false, repeat the current url unchanged.'
       }
     },
-    required: ['changed', 'tag', 'line', 'eventDate'],
+    required: ['changed', 'tag', 'line', 'eventDate', 'url'],
     additionalProperties: false
   };
 }
@@ -96,9 +100,10 @@ function buildResearchPrompt(current) {
     'is currently shown (e.g. a Fixture that has since been played becomes a ' +
     'Result; a Team News item is superseded by a newer one). If you find nothing ' +
     'materially different from the current digest, say so explicitly rather than ' +
-    'restating the same fact as if it were new. Summarize your findings in prose ' +
-    'for each entity before you finish — you will be asked to submit a structured ' +
-    'result afterward.'
+    'restating the same fact as if it were new. Also note a direct source URL for ' +
+    'each item where you have one. Summarize your findings in prose for each ' +
+    'entity before you finish — you will be asked to submit a structured result ' +
+    'afterward.'
   );
 }
 
@@ -119,7 +124,8 @@ function validateDigest(digest) {
       TAG_VALUES.indexOf(slot.tag) === -1 ||
       typeof slot.line !== 'string' || !slot.line ||
       typeof slot.eventDate !== 'string' ||
-      typeof slot.lastChecked !== 'string'
+      typeof slot.lastChecked !== 'string' ||
+      typeof slot.url !== 'string'
     ) {
       throw new Error('digest slot "' + ids[i] + '" has an invalid shape');
     }
@@ -141,10 +147,14 @@ function applyDiff(current, modelOutput, nowIso) {
         tag: proposed.tag,
         line: proposed.line,
         eventDate: proposed.eventDate,
+        url: proposed.url || '',
         lastChecked: nowIso
       };
     } else if (priorSlot) {
-      entities[e.id] = priorSlot; // untouched — lastChecked does NOT move
+      // Untouched — lastChecked does NOT move. Object.assign backfills url
+      // for entities stored before that field existed, so an old digest
+      // doesn't fail validateDigest on the first run after this deploy.
+      entities[e.id] = Object.assign({ url: '' }, priorSlot);
     } else {
       // First run: nothing to carry forward even though the model marked
       // it unchanged (unlikely with no prior context, but handle it).
@@ -154,6 +164,7 @@ function applyDiff(current, modelOutput, nowIso) {
         tag: proposed.tag,
         line: proposed.line,
         eventDate: proposed.eventDate,
+        url: proposed.url || '',
         lastChecked: nowIso
       };
     }
@@ -209,6 +220,28 @@ async function runSportsDigest(env) {
   return next;
 }
 
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // "last week" per entity, at read time only
+
+// Applied only when SERVING the digest to the dashboard — never when
+// storing it. KV always keeps the real facts (needed so future diff
+// prompts compare against genuine history, not a synthetic placeholder);
+// this just decides what's honest to show once an entity's real eventDate
+// is more than a week old.
+function presentDigest(raw) {
+  var digest = JSON.parse(raw);
+  var entities = {};
+  Object.keys(digest.entities).forEach(function (id) {
+    var slot = digest.entities[id];
+    var age = Date.now() - Date.parse(slot.eventDate);
+    if (isNaN(age) || age > MAX_AGE_MS) {
+      entities[id] = Object.assign({}, slot, { line: 'No update in the past week', url: '' });
+    } else {
+      entities[id] = slot;
+    }
+  });
+  return { updatedAt: digest.updatedAt, entities: entities };
+}
+
 async function handleSportsData(request, env) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders(env) });
@@ -218,7 +251,7 @@ async function handleSportsData(request, env) {
   if (!raw) {
     return new Response(JSON.stringify({ error: 'not_generated_yet' }), { status: 404, headers: headers });
   }
-  return new Response(raw, { status: 200, headers: headers });
+  return new Response(JSON.stringify(presentDigest(raw)), { status: 200, headers: headers });
 }
 
 async function handleSportsRun(request, env) {
