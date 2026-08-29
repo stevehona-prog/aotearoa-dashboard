@@ -35,6 +35,18 @@
   .rowline:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
   .btnline { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: oklch(78% 0.14 68); border: 1px solid oklch(45% 0.09 65); border-radius: 7px; padding: 5px 10px; background: oklch(23% 0.04 155); }
   .icobtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; border: 1px solid oklch(32% 0.045 155); background: oklch(23% 0.04 155); color: oklch(75% 0.025 145); }
+  /* Text inputs never had an explicit background — the calendar quick-add
+     field set only a light text color, defaulting to white-on-white
+     against the browser's own white input background. Fix once, globally,
+     rather than per-field, so every current and future form control
+     (compose To/body, new event fields, etc.) is correct automatically. */
+  input[type="text"], input[type="date"], input[type="time"], input[type="email"], textarea {
+    background: oklch(23% 0.04 155);
+    color: oklch(94% 0.02 90);
+  }
+  input[type="text"]::placeholder, input[type="date"]::placeholder, input[type="time"]::placeholder, input[type="email"]::placeholder, textarea::placeholder {
+    color: oklch(58% 0.02 100);
+  }
   table.cmp { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   table.cmp th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: oklch(68% 0.025 145); font-weight: 600; padding: 0 10px 8px; border-bottom: 1px solid oklch(29% 0.04 155); }
   table.cmp td { padding: 10px 10px; border-bottom: 1px solid oklch(28% 0.035 155); vertical-align: top; }
@@ -344,7 +356,7 @@
       </div>
 
       <div style="display:flex;gap:8px;margin-top:14px;">
-        <input type="text" id="calendar-quickadd-input" placeholder="Quick add an event…" style="flex:1;border:1px solid oklch(29% 0.04 155);border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;color:oklch(94% 0.02 90);box-sizing:border-box;">
+        <input type="text" id="calendar-quickadd-input" placeholder="Quick add an event…" style="flex:1;border:1px solid oklch(29% 0.04 155);border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;box-sizing:border-box;">
         <span class="icobtn" id="calendar-quickadd-btn" style="width:32px;height:32px;background:oklch(58% 0.13 155);color:oklch(12% 0.03 155);border-color:oklch(58% 0.13 155);cursor:pointer;"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
       </div>
       <div id="calendar-quickadd-status" style="font-size:11px;color:oklch(68% 0.025 145);margin-top:4px;min-height:14px;"></div>
