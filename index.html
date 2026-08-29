@@ -2047,7 +2047,10 @@
         var e = digest.entities[id];
         if (!newest || (e.lastChecked || '') > (newest.lastChecked || '')) newest = e;
       });
-      if (newest) subEl.textContent = newest.line;
+      // newest.line reads naturally under the panel's own team-name
+      // heading, but on its own here (no heading in the highlight tile)
+      // it loses its subject — prepend the label so it stands alone.
+      if (newest) subEl.textContent = newest.label + ': ' + newest.line;
     }
 
     bodyEl.innerHTML = koruSpinnerHtml();
