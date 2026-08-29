@@ -378,8 +378,8 @@
     </div>
     <svg width="60" height="10" viewBox="0 0 60 10" style="margin:8px 0 14px;"><rect x="0" y="8" width="6" height="2" fill="oklch(78% 0.1 40)"/><rect x="10" y="6" width="6" height="4" fill="oklch(70% 0.12 38)"/><rect x="20" y="4" width="6" height="6" fill="oklch(62% 0.14 36)"/><rect x="30" y="2" width="6" height="8" fill="oklch(74% 0.14 68)"/></svg>
 
-    <div id="realestate-card" style="border:1px solid oklch(32% 0.045 155);border-radius:9px;padding:14px 16px;">
-      <div style="display:flex;gap:14px;">
+    <div id="realestate-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;">
+      <div style="border:1px solid oklch(32% 0.045 155);border-radius:9px;padding:14px 16px;display:flex;gap:14px;">
         <div style="width:120px;height:90px;border-radius:7px;background:oklch(32% 0.045 155);flex:none;"></div>
         <div style="min-width:0;flex:1;">
           <div style="font-size:14px;font-weight:700;">142 Ridgeview Rd, Maleny</div>
@@ -633,8 +633,8 @@
     var badgeEl = els.badge, panelEl = els.panel, tileEl = els.tile;
     if (!badgeEl) return;
     var live = state === 'live';
-    var labels = { sample: 'Sample', loading: 'Loading…', live: 'Live', error: text || 'Error' };
-    badgeEl.textContent = labels[state] || labels.sample;
+    var defaults = { sample: 'Sample', loading: 'Loading…', live: 'Live', error: 'Error' };
+    badgeEl.textContent = text || defaults[state] || defaults.sample;
     if (state === 'loading') {
       badgeEl.style.background = 'oklch(28% 0.06 68)';
       badgeEl.style.color = 'oklch(84% 0.12 68)';
@@ -830,19 +830,11 @@
     var currentToken = null;
     var messageStubs = {};  // id -> { id, threadId } from the inbox list
     var detailCache = {};   // id -> full headers + body, fetched lazily for reply/forward
-    var panelEl = document.getElementById('email-panel');
-    var tileEl = document.getElementById('highlight-email-tile');
-
-    function setBadge(text, live) {
-      badgeEl.textContent = text;
-      badgeEl.style.background = live ? 'oklch(26% 0.07 155)' : 'oklch(30% 0.11 45)';
-      badgeEl.style.color = live ? 'oklch(82% 0.14 155)' : 'oklch(88% 0.09 65)';
-      [panelEl, tileEl].forEach(function (el) {
-        if (!el) return;
-        el.style.background = live ? 'oklch(19% 0.035 155)' : 'oklch(24% 0.07 45)';
-        el.style.borderColor = live ? 'oklch(32% 0.045 155)' : 'oklch(38% 0.09 48)';
-      });
-    }
+    var els = {
+      badge: badgeEl,
+      panel: document.getElementById('email-panel'),
+      tile: document.getElementById('highlight-email-tile')
+    };
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, function (c) {
@@ -881,7 +873,7 @@
       var headers = { Authorization: 'Bearer ' + currentToken };
       for (var k in opts.headers) headers[k] = opts.headers[k];
       opts.headers = headers;
-      return fetch('https://gmail.googleapis.com/gmail/v1/users/me/' + path, opts).then(function (res) {
+      return fetchWithTimeout('https://gmail.googleapis.com/gmail/v1/users/me/' + path, opts).then(function (res) {
         if (!res.ok) return res.text().then(function (t) { throw new Error('Gmail API ' + res.status + ': ' + t); });
         return res.json();
       });
@@ -1225,22 +1217,25 @@
     function loadInbox(accessToken) {
       currentToken = accessToken;
       warmContactsCache();
+      rowsEl.innerHTML = koruSpinnerHtml();
+      setPanelState(els, 'loading');
       gmailFetch('messages?maxResults=' + GMAIL_MAX_RESULTS + '&labelIds=INBOX')
         .then(function (data) {
           var ids = (data.messages || []).map(function (m) { return m.id; });
-          if (!ids.length) { renderMessages([]); setBadge('Live', true); return; }
+          if (!ids.length) { renderMessages([]); setPanelState(els, 'live'); return; }
           return Promise.all(ids.map(function (id) {
             return gmailFetch('messages/' + id + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject');
           })).then(function (msgs) {
             renderMessages(msgs);
-            setBadge('Live', true);
+            setPanelState(els, 'live');
             connectWrap.style.display = 'none';
           });
         })
         .then(function () { updateHighlight(); })
         .catch(function (err) {
           console.error('Gmail fetch failed:', err);
-          setBadge('Error', false);
+          rowsEl.innerHTML = panelErrorHtml(classifyFetchError(err));
+          setPanelState(els, 'error', classifyFetchError(err));
           sessionStorage.removeItem('google_token');
           sessionStorage.removeItem('google_token_expiry');
           sessionStorage.removeItem('google_token_scope');
@@ -1253,7 +1248,7 @@
       if (token) {
         loadInbox(token);
       } else {
-        setBadge('Not connected', false);
+        setPanelState(els, 'sample', 'Not connected');
       }
     });
   })();
@@ -1273,19 +1268,11 @@
     if (!connectBtn || !rowsEl || !badgeEl) return;
 
     var currentToken = null;
-    var panelEl = document.getElementById('calendar-panel');
-    var tileEl = document.getElementById('highlight-calendar-tile');
-
-    function setBadge(text, live) {
-      badgeEl.textContent = text;
-      badgeEl.style.background = live ? 'oklch(26% 0.07 155)' : 'oklch(30% 0.11 45)';
-      badgeEl.style.color = live ? 'oklch(82% 0.14 155)' : 'oklch(88% 0.09 65)';
-      [panelEl, tileEl].forEach(function (el) {
-        if (!el) return;
-        el.style.background = live ? 'oklch(19% 0.035 155)' : 'oklch(24% 0.07 45)';
-        el.style.borderColor = live ? 'oklch(32% 0.045 155)' : 'oklch(38% 0.09 48)';
-      });
-    }
+    var els = {
+      badge: badgeEl,
+      panel: document.getElementById('calendar-panel'),
+      tile: document.getElementById('highlight-calendar-tile')
+    };
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, function (c) {
@@ -1298,7 +1285,7 @@
       var headers = { Authorization: 'Bearer ' + currentToken };
       for (var k in opts.headers) headers[k] = opts.headers[k];
       opts.headers = headers;
-      return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/' + path, opts).then(function (res) {
+      return fetchWithTimeout('https://www.googleapis.com/calendar/v3/calendars/primary/' + path, opts).then(function (res) {
         if (!res.ok) return res.text().then(function (t) { throw new Error('Calendar API ' + res.status + ': ' + t); });
         return res.json();
       });
@@ -1366,6 +1353,8 @@
 
     function loadEvents(accessToken) {
       currentToken = accessToken;
+      rowsEl.innerHTML = koruSpinnerHtml();
+      setPanelState(els, 'loading');
       var url = 'events?maxResults=' + CALENDAR_MAX_RESULTS +
         '&singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(new Date().toISOString());
       calendarFetch(url)
@@ -1373,12 +1362,13 @@
           var events = data.items || [];
           renderEvents(events);
           updateHighlight(events);
-          setBadge('Live', true);
+          setPanelState(els, 'live');
           connectWrap.style.display = 'none';
         })
         .catch(function (err) {
           console.error('Calendar fetch failed:', err);
-          setBadge('Error', false);
+          rowsEl.innerHTML = panelErrorHtml(classifyFetchError(err));
+          setPanelState(els, 'error', classifyFetchError(err));
           sessionStorage.removeItem('google_token');
           sessionStorage.removeItem('google_token_expiry');
           sessionStorage.removeItem('google_token_scope');
@@ -1419,7 +1409,7 @@
       if (token) {
         loadEvents(token);
       } else {
-        setBadge('Not connected', false);
+        setPanelState(els, 'sample', 'Not connected');
       }
     });
   })();
@@ -1431,31 +1421,23 @@
   // editing the saved search itself still happens on their site directly.
   var REALESTATE_MAX = 10;
   var REALESTATE_SEARCH_COUNT = 20;
+  var REALESTATE_PAGE_SIZE = 4;
 
   (function () {
-    var badgeEl = document.getElementById('realestate-badge');
-    var panelEl = document.getElementById('realestate-panel');
-    var tileEl = document.getElementById('highlight-realestate-tile');
-    var cardEl = document.getElementById('realestate-card');
+    var els = {
+      badge: document.getElementById('realestate-badge'),
+      panel: document.getElementById('realestate-panel'),
+      tile: document.getElementById('highlight-realestate-tile')
+    };
+    var cardsEl = document.getElementById('realestate-cards');
     var prevBtn = document.getElementById('realestate-prev');
     var nextBtn = document.getElementById('realestate-next');
     var posEl = document.getElementById('realestate-position');
-    if (!badgeEl || !cardEl || !prevBtn || !nextBtn) return;
+    if (!els.badge || !cardsEl || !prevBtn || !nextBtn) return;
 
     var currentToken = null;
     var listings = [];
-    var index = 0;
-
-    function setBadge(text, live) {
-      badgeEl.textContent = text;
-      badgeEl.style.background = live ? 'oklch(26% 0.07 155)' : 'oklch(30% 0.11 45)';
-      badgeEl.style.color = live ? 'oklch(82% 0.14 155)' : 'oklch(88% 0.09 65)';
-      [panelEl, tileEl].forEach(function (el) {
-        if (!el) return;
-        el.style.background = live ? 'oklch(19% 0.035 155)' : 'oklch(24% 0.07 45)';
-        el.style.borderColor = live ? 'oklch(32% 0.045 155)' : 'oklch(38% 0.09 48)';
-      });
-    }
+    var page = 0;
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, function (c) {
@@ -1464,7 +1446,7 @@
     }
 
     function gmailFetch(path) {
-      return fetch('https://gmail.googleapis.com/gmail/v1/users/me/' + path, {
+      return fetchWithTimeout('https://gmail.googleapis.com/gmail/v1/users/me/' + path, {
         headers: { Authorization: 'Bearer ' + currentToken }
       }).then(function (res) {
         if (!res.ok) return res.text().then(function (t) { throw new Error('Gmail API ' + res.status + ': ' + t); });
@@ -1549,14 +1531,7 @@
       };
     }
 
-    function renderEmpty() {
-      cardEl.innerHTML = '<div style="font-size:12.5px;color:oklch(68% 0.025 145);">No realestate.com.au alert emails found yet.</div>';
-      posEl.textContent = '0 of 0';
-    }
-
-    function renderCurrent() {
-      if (!listings.length) { renderEmpty(); return; }
-      var listing = listings[index];
+    function listingCardHtml(listing) {
       var thumb = listing.image
         ? '<img src="' + escapeHtml(listing.image) + '" alt="" style="width:120px;height:90px;border-radius:7px;object-fit:cover;flex:none;">'
         : '<div style="width:120px;height:90px;border-radius:7px;background:oklch(32% 0.045 155);flex:none;"></div>';
@@ -1566,8 +1541,7 @@
       if (listing.baths) details.push(listing.baths + ' bath');
       if (listing.cars) details.push(listing.cars + ' car');
       if (listing.land) details.push(listing.land);
-      cardEl.innerHTML =
-        '<div style="display:flex;gap:14px;">' +
+      return '<div style="border:1px solid oklch(32% 0.045 155);border-radius:9px;padding:14px 16px;display:flex;gap:14px;">' +
           thumb +
           '<div style="min-width:0;flex:1;">' +
             '<div style="font-size:14px;font-weight:700;">' + escapeHtml(listing.address) + '</div>' +
@@ -1577,18 +1551,37 @@
             '<a href="' + escapeHtml(listing.url) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;margin-top:8px;">View Property <svg width="12" height="12" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
           '</div>' +
         '</div>';
-      posEl.textContent = (index + 1) + ' of ' + listings.length;
+    }
+
+    function renderEmpty() {
+      cardsEl.innerHTML = '<div style="font-size:12.5px;color:oklch(68% 0.025 145);">No realestate.com.au alert emails found yet.</div>';
+      posEl.textContent = '0 of 0';
+    }
+
+    function renderPage() {
+      if (!listings.length) { renderEmpty(); return; }
+      var start = page * REALESTATE_PAGE_SIZE;
+      var pageListings = listings.slice(start, start + REALESTATE_PAGE_SIZE);
+      cardsEl.innerHTML = pageListings.map(listingCardHtml).join('');
+      var shown = start + pageListings.length;
+      posEl.textContent = pageListings.length > 1
+        ? 'Showing ' + (start + 1) + '–' + shown + ' of ' + listings.length
+        : 'Showing ' + shown + ' of ' + listings.length;
+    }
+
+    function pageCount() {
+      return Math.max(1, Math.ceil(listings.length / REALESTATE_PAGE_SIZE));
     }
 
     prevBtn.addEventListener('click', function () {
       if (!listings.length) return;
-      index = (index - 1 + listings.length) % listings.length;
-      renderCurrent();
+      page = (page - 1 + pageCount()) % pageCount();
+      renderPage();
     });
     nextBtn.addEventListener('click', function () {
       if (!listings.length) return;
-      index = (index + 1) % listings.length;
-      renderCurrent();
+      page = (page + 1) % pageCount();
+      renderPage();
     });
 
     function updateHighlight() {
@@ -1601,6 +1594,8 @@
 
     function loadListings(accessToken) {
       currentToken = accessToken;
+      cardsEl.innerHTML = koruSpinnerHtml();
+      setPanelState(els, 'loading');
       // Scoped to actual saved-search alerts — from:realestate.com.au
       // alone also pulls in market reports, "properties like X" nudges,
       // and unrelated finance content that never contain a listing.
@@ -1626,14 +1621,15 @@
             });
           });
           listings = unique.slice(0, REALESTATE_MAX);
-          index = 0;
-          renderCurrent();
+          page = 0;
+          renderPage();
           updateHighlight();
-          setBadge('Live', true);
+          setPanelState(els, 'live');
         })
         .catch(function (err) {
           console.error('Real Estate fetch failed:', err);
-          setBadge('Error', false);
+          cardsEl.innerHTML = panelErrorHtml(classifyFetchError(err));
+          setPanelState(els, 'error', classifyFetchError(err));
         });
     }
 
@@ -1641,7 +1637,7 @@
       if (token) {
         loadListings(token);
       } else {
-        setBadge('Not connected', false);
+        setPanelState(els, 'sample', 'Not connected');
       }
     });
   })();
