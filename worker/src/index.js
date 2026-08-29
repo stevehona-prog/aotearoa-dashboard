@@ -66,9 +66,13 @@ function redirectUriFor(requestUrl) {
   return new URL('/auth/callback', requestUrl).toString();
 }
 
+// CORS's Access-Control-Allow-Origin must be an origin (scheme+host+port),
+// never a path — FRONTEND_URL itself keeps the /aotearoa-dashboard path
+// because handleAuthCallback's redirect needs it, so strip it here rather
+// than send an invalid ACAO value the browser silently rejects.
 function corsHeaders(env) {
   return {
-    'Access-Control-Allow-Origin': env.FRONTEND_URL,
+    'Access-Control-Allow-Origin': new URL(env.FRONTEND_URL).origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization',
     'Cache-Control': 'no-store'

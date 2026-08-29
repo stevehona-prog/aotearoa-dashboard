@@ -231,9 +231,12 @@ async function runSportsDigest(env) {
   return next;
 }
 
+// Same fix as index.js's corsHeaders(): ACAO must be an origin only, never
+// a path, but FRONTEND_URL keeps its /aotearoa-dashboard path for the
+// auth redirect elsewhere — strip it down to the origin here.
 function corsHeadersFor(env) {
   return {
-    'Access-Control-Allow-Origin': env.FRONTEND_URL,
+    'Access-Control-Allow-Origin': new URL(env.FRONTEND_URL).origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization',
     'Cache-Control': 'no-store'
