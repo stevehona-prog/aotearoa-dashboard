@@ -70,15 +70,51 @@ away.
 
 ## What's live vs. sample right now
 
-The Email panel can connect to your real Gmail inbox, and the Calendar
-panel can connect to your real Google Calendar (see below for both). Every
-other panel — news, sports, real estate, product research, widgets — is
-realistic sample content, laid out exactly where live data would go once
-those sources are wired up. That's the next phase of work, and it needs a
-small backend (to hold API keys, refresh data on a schedule, and — if you
-want settings or added widgets to follow you across devices — a place to
-store your account's preferences). This static site is the front end that
-phase will plug into.
+The Email panel connects to your real Gmail inbox, the Calendar panel to
+your real Google Calendar, and the Real Estate panel reads real listings
+out of your realestate.com.au saved-search alert emails (see below for
+all three). Every other panel — news, sports, product research, widgets —
+is realistic sample content, laid out exactly where live data would go
+once those sources are wired up. That's the next phase of work, and it
+needs a small backend (to hold API keys, refresh data on a schedule, and
+— if you want settings or added widgets to follow you across devices — a
+place to store your account's preferences). This static site is the
+front end that phase will plug into.
+
+## Real Estate panel: realestate.com.au via email alerts
+
+realestate.com.au has no public API for consumer accounts, and their
+Terms of Use explicitly prohibit scraping — so this doesn't talk to
+realestate.com.au at all. It reads the saved-search alert emails
+realestate.com.au already sends to your Gmail (`from:realestate.com.au`),
+using the exact same Gmail connection Email/Calendar use. There's no new
+Connect button, no new OAuth scope: this panel just listens for the same
+sign-in and goes live automatically once you've connected Gmail via
+either of the other panels.
+
+**You still manage the saved search itself on realestate.com.au directly**
+— this panel can't create, edit, or delete it, since there's no legitimate
+way to write back to their site. Make sure email alerts are turned on for
+your saved search there; if they're off, there's nothing for this panel
+to read.
+
+How it works: it searches your inbox for realestate.com.au's alert emails,
+and each listing inside one sits between HTML comment markers
+(`<!-- Start Listing... -->` / `<!-- End Listing... -->`) that REA's own
+template uses — reliable even when one email bundles several listings.
+The canonical listing URL is pulled from an Outlook-only fallback comment
+inside each block, which — unlike the visible "View Property" button —
+links straight to `realestate.com.au`, not through a click-tracking
+redirect, so tapping it can open the real estate.com.au app if you have
+it installed rather than only ever landing in a browser. Listings are
+deduped by that URL (in case the same property shows up in more than one
+alert) and capped at the 10 most recent unique ones, browsable with the
+left/right arrows on the single-listing card.
+
+One known gap: this particular parsing was built against a rural/acreage
+listing that had no bed/bath/car row, so that field isn't extracted yet.
+If you want it, forward me an alert email for a house listing (which
+should have that row) and I'll extend the parsing.
 
 ## Connecting Gmail and Google Calendar
 
