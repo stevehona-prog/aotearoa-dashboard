@@ -109,12 +109,15 @@ redirect, so tapping it can open the real estate.com.au app if you have
 it installed rather than only ever landing in a browser. Listings are
 deduped by that URL (in case the same property shows up in more than one
 alert) and capped at the 10 most recent unique ones, browsable with the
-left/right arrows on the single-listing card.
+left/right arrows on the single-listing card. Bed/bath/car count and land
+size show when REA's email includes them (verified against both a house
+and a vacant-land listing — land listings just don't have bed/bath data
+to show, which isn't a gap, there's nothing there).
 
-One known gap: this particular parsing was built against a rural/acreage
-listing that had no bed/bath/car row, so that field isn't extracted yet.
-If you want it, forward me an alert email for a house listing (which
-should have that row) and I'll extend the parsing.
+The Gmail search is scoped to `subject:"saved search"` rather than just
+`from:realestate.com.au`, since the latter also pulls in market reports,
+"properties like X" nudges, and unrelated finance content that never
+contain an actual listing.
 
 ## Connecting Gmail and Google Calendar
 

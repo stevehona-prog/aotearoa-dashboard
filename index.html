@@ -1398,6 +1398,24 @@
       return blocks;
     }
 
+    // Bed/bath/car/land size each render as an icon + value pair, e.g.
+    // <img alt="Bedrooms" .../></td><td>&nbsp;&nbsp;5</td> — labels vary a
+    // little between agencies/templates (seen both "Car Spaces" and
+    // "Parking spaces", "Property size" and "Land size"), so try each
+    // candidate in turn. Land size sometimes carries a superscript unit
+    // (405m<sup>2</sup> for 405m²) which needs reassembling.
+    function extractIconValue(block, labels) {
+      for (var i = 0; i < labels.length; i++) {
+        var re = new RegExp('alt="' + labels[i] + '"[^>]*/>\\s*</td>\\s*<td[^>]*>\\s*(?:&nbsp;)*([^<]+?)\\s*(?:<sup>([^<]*)</sup>)?\\s*<', 'i');
+        var m = block.match(re);
+        if (m) {
+          var sup = { '2': '²', '3': '³' }[m[2]] || m[2] || '';
+          return (m[1] || '').trim() + sup;
+        }
+      }
+      return '';
+    }
+
     function parseListing(block) {
       // The canonical realestate.com.au URL lives inside an Outlook-only
       // VML fallback comment — invisible in every normal mail client, but
@@ -1417,7 +1435,11 @@
         price: priceMatch ? priceMatch[1].trim() : '',
         agency: agencyMatch ? agencyMatch[1] : '',
         agent: agentMatch ? agentMatch[1] : '',
-        image: imgMatch ? imgMatch[1] : ''
+        image: imgMatch ? imgMatch[1] : '',
+        beds: extractIconValue(block, ['Bedrooms']),
+        baths: extractIconValue(block, ['Bathrooms']),
+        cars: extractIconValue(block, ['Car Spaces', 'Parking spaces']),
+        land: extractIconValue(block, ['Property size', 'Land size'])
       };
     }
 
@@ -1433,12 +1455,18 @@
         ? '<img src="' + escapeHtml(listing.image) + '" alt="" style="width:120px;height:90px;border-radius:7px;object-fit:cover;flex:none;">'
         : '<div style="width:120px;height:90px;border-radius:7px;background:oklch(32% 0.045 155);flex:none;"></div>';
       var subtitle = [listing.agency, listing.agent].filter(Boolean).join(' · ');
+      var details = [];
+      if (listing.beds) details.push(listing.beds + ' bed');
+      if (listing.baths) details.push(listing.baths + ' bath');
+      if (listing.cars) details.push(listing.cars + ' car');
+      if (listing.land) details.push(listing.land);
       cardEl.innerHTML =
         '<div style="display:flex;gap:14px;">' +
           thumb +
           '<div style="min-width:0;flex:1;">' +
             '<div style="font-size:14px;font-weight:700;">' + escapeHtml(listing.address) + '</div>' +
             (listing.price ? '<div style="font-size:16px;font-weight:700;color:oklch(78% 0.14 68);margin-top:4px;">' + escapeHtml(listing.price) + '</div>' : '') +
+            (details.length ? '<div style="display:flex;gap:12px;margin-top:6px;font-size:12px;color:oklch(68% 0.025 145);">' + details.map(function (d) { return '<span>' + escapeHtml(d) + '</span>'; }).join('') + '</div>' : '') +
             (subtitle ? '<div style="font-size:12px;color:oklch(68% 0.025 145);margin-top:4px;">' + escapeHtml(subtitle) + '</div>' : '') +
             '<a href="' + escapeHtml(listing.url) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;margin-top:8px;">View Property <svg width="12" height="12" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
           '</div>' +
@@ -1467,7 +1495,10 @@
 
     function loadListings(accessToken) {
       currentToken = accessToken;
-      gmailFetch('messages?maxResults=' + REALESTATE_SEARCH_COUNT + '&q=' + encodeURIComponent('from:realestate.com.au'))
+      // Scoped to actual saved-search alerts — from:realestate.com.au
+      // alone also pulls in market reports, "properties like X" nudges,
+      // and unrelated finance content that never contain a listing.
+      gmailFetch('messages?maxResults=' + REALESTATE_SEARCH_COUNT + '&q=' + encodeURIComponent('from:realestate.com.au subject:"saved search"'))
         .then(function (data) {
           var ids = (data.messages || []).map(function (m) { return m.id; });
           if (!ids.length) return [];
