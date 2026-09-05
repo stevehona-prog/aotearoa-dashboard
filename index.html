@@ -1769,6 +1769,14 @@
       });
     }
 
+    // REA's alert-email HTML is adversarial content -- escapeHtml makes a
+    // url/image value safe to insert into an attribute, but never checks
+    // its scheme, so a javascript: URL would still render as a clickable
+    // link/image source and execute on click/load. Restrict to http(s).
+    function httpUrl(url) {
+      return /^https?:\/\//i.test(url || '') ? url : '';
+    }
+
     function gmailFetch(path) {
       return fetchWithTimeout('https://gmail.googleapis.com/gmail/v1/users/me/' + path, {
         headers: { Authorization: 'Bearer ' + currentToken }
@@ -1856,8 +1864,9 @@
     }
 
     function listingCardHtml(listing) {
-      var thumb = listing.image
-        ? '<img src="' + escapeHtml(listing.image) + '" alt="" style="width:120px;height:90px;border-radius:7px;object-fit:cover;flex:none;">'
+      var image = httpUrl(listing.image);
+      var thumb = image
+        ? '<img src="' + escapeHtml(image) + '" alt="" style="width:120px;height:90px;border-radius:7px;object-fit:cover;flex:none;">'
         : '<div style="width:120px;height:90px;border-radius:7px;background:oklch(32% 0.045 155);flex:none;"></div>';
       var subtitle = [listing.agency, listing.agent].filter(Boolean).join(' · ');
       var details = [];
@@ -1872,7 +1881,7 @@
             (listing.price ? '<div style="font-size:16px;font-weight:700;color:oklch(78% 0.14 68);margin-top:4px;">' + escapeHtml(listing.price) + '</div>' : '') +
             (details.length ? '<div style="display:flex;gap:12px;margin-top:6px;font-size:12px;color:oklch(68% 0.025 145);">' + details.map(function (d) { return '<span>' + escapeHtml(d) + '</span>'; }).join('') + '</div>' : '') +
             (subtitle ? '<div style="font-size:12px;color:oklch(68% 0.025 145);margin-top:4px;">' + escapeHtml(subtitle) + '</div>' : '') +
-            '<a href="' + escapeHtml(listing.url) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;margin-top:8px;">View Property <svg width="12" height="12" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
+            '<a href="' + escapeHtml(httpUrl(listing.url)) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;margin-top:8px;">View Property <svg width="12" height="12" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
           '</div>' +
         '</div>';
     }
@@ -2009,14 +2018,23 @@
       });
     }
 
+    // entity.url comes from Claude's web search results -- adversarial
+    // content. escapeHtml makes it safe to insert into an attribute, but
+    // never checks its scheme, so a javascript: URL would still render as a
+    // clickable link and execute on click. Restrict to http(s).
+    function httpUrl(url) {
+      return /^https?:\/\//i.test(url || '') ? url : '';
+    }
+
     function sectionHeaderHtml(label) {
       return '<div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:oklch(58% 0.13 155);margin-bottom:8px;">' + label + '</div>';
     }
 
     function summaryHtml(entity) {
       var line = escapeHtml(entity.line);
-      return entity.url
-        ? '<a href="' + escapeHtml(entity.url) + '" target="_blank" rel="noopener" style="color:inherit;">' + line + '</a>'
+      var url = httpUrl(entity.url);
+      return url
+        ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" style="color:inherit;">' + line + '</a>'
         : line;
     }
 
@@ -2111,6 +2129,14 @@
       });
     }
 
+    // article.url comes from Claude's web search results -- adversarial
+    // content. escapeHtml makes it safe to insert into an attribute, but
+    // never checks its scheme, so a javascript: URL would still render as a
+    // clickable link and execute on click. Restrict to http(s).
+    function httpUrl(url) {
+      return /^https?:\/\//i.test(url || '') ? url : '';
+    }
+
     // Twice-daily updates mean "Xh ago" implies false precision — a
     // day-level label matches the freshness the cron actually provides.
     function relativeDay(publishedAt) {
@@ -2126,8 +2152,9 @@
     function rowHtml(article) {
       var meta = escapeHtml(article.source) + ' &middot; ' + relativeDay(article.publishedAt);
       var headline = escapeHtml(article.headline);
-      var headlineHtml = article.url
-        ? '<a href="' + escapeHtml(article.url) + '" target="_blank" rel="noopener" style="color:inherit;">' + headline + '</a>'
+      var url = httpUrl(article.url);
+      var headlineHtml = url
+        ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" style="color:inherit;">' + headline + '</a>'
         : headline;
       return '<div class="rowline">' +
         '<div style="font-size:14px;font-weight:600;">' + headlineHtml + '</div>' +
